@@ -36,6 +36,7 @@ pub struct App {
     pub delete_progress: Option<DeleteProgress>,
     pub delete_thread: Option<JoinHandle<Result<(), String>>>,
     pub delete_rx: Option<mpsc::Receiver<DeleteProgressUpdate>>,
+    pub deleting_path: Option<PathBuf>,  // Path being deleted (for tree update)
     pub notification: Option<String>,
     pub notification_time: Option<Instant>,
     pub show_help: bool,
@@ -93,6 +94,7 @@ impl App {
             delete_progress: None,
             delete_thread: None,
             delete_rx: None,
+            deleting_path: None,
             notification: None,
             notification_time: None,
             show_help: false,
@@ -226,6 +228,43 @@ impl App {
         if self.nav_stack.pop().is_some() {
             self.selected_index = 0;
             self.scroll_offset = 0;
+        }
+    }
+
+    /// Remove a deleted entry from the tree and update sizes up the tree
+    fn remove_entry_from_tree(&mut self, path: &std::path::Path) {
+        let Some(tree) = self.tree.as_mut() else { return };
+
+        // Navigate to the current node using nav_stack
+        let mut node = tree;
+        for &idx in &self.nav_stack {
+            node = &mut node.children[idx];
+        }
+
+        // Find and remove the child with matching path
+        if let Some(idx) = node.children.iter().position(|c| c.path == path) {
+            let removed_size = node.children[idx].size;
+            node.children.remove(idx);
+
+            // Update selected_index if needed
+            if self.selected_index >= node.children.len() && self.selected_index > 0 {
+                // Account for ".." entry if present
+                let offset = if self.nav_stack.is_empty() { 0 } else { 1 };
+                let max_idx = node.children.len().saturating_sub(1) + offset;
+                self.selected_index = max_idx;
+            }
+
+            // Subtract the removed size from all parents up to root
+            if removed_size > 0 {
+                let tree = self.tree.as_mut().unwrap();
+                tree.size = tree.size.saturating_sub(removed_size);
+
+                let mut parent = tree;
+                for &idx in &self.nav_stack {
+                    parent = &mut parent.children[idx];
+                    parent.size = parent.size.saturating_sub(removed_size);
+                }
+            }
         }
     }
 
@@ -365,6 +404,7 @@ impl App {
 
         self.delete_thread = Some(handle);
         self.delete_rx = Some(rx);
+        self.deleting_path = Some(path.to_path_buf());
         self.mode = AppMode::Deleting;
         self.delete_progress = Some(DeleteProgress {
             deleted_bytes: 0,
@@ -457,8 +497,10 @@ impl App {
                     self.notification = Some(msg);
                     self.notification_time = Some(Instant::now());
                     self.disk_space = platform::get_disk_space(&self.root_path);
-                    // Rescan after delete
-                    self.refresh();
+                    // Remove deleted entry from tree (no rescan needed!)
+                    if let Some(path) = self.deleting_path.take() {
+                        self.remove_entry_from_tree(&path);
+                    }
                 }
                 DeleteProgressUpdate::Error(e) => {
                     self.delete_progress = None;
