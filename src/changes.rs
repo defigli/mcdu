@@ -144,6 +144,7 @@ fn calculate_dir_size(path: PathBuf) -> u64 {
     use walkdir::WalkDir;
 
     WalkDir::new(path)
+        .same_file_system(true)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter_map(|e| e.metadata().ok())

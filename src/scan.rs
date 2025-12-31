@@ -83,11 +83,14 @@ pub fn scan_directory(
 
 fn quick_dir_size(path: &std::path::Path) -> u64 {
     // Calculate total size of all files in directory
-    // Uses DirEntry's metadata when available to avoid double stat calls
+    // Stay on same filesystem to avoid counting mounted volumes (like ncdu does)
     let mut total = 0u64;
 
-    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
-        // Get file size from metadata already loaded by WalkDir
+    for entry in WalkDir::new(path)
+        .same_file_system(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if let Ok(metadata) = entry.metadata() {
             if metadata.is_file() {
                 total += metadata.len();
