@@ -2,6 +2,20 @@ use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
+/// Get actual disk usage for a file (handles sparse files correctly)
+#[cfg(unix)]
+fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    metadata.blocks() * 512
+}
+
+#[cfg(not(unix))]
+fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    metadata.len()
+}
+
 pub struct DeleteResult {
     pub total_bytes: u64,
     pub total_files: u64,
@@ -33,7 +47,7 @@ pub fn delete_directory(path: &PathBuf) -> Result<DeleteResult, Box<dyn std::err
             // Get metadata once and store it
             entry.metadata().ok().map(|metadata| EntryWithMetadata {
                 path: entry_path.to_path_buf(),
-                size: metadata.len(),
+                size: disk_usage(&metadata),
                 is_file: metadata.is_file(),
             })
         })

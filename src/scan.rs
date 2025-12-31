@@ -4,6 +4,21 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use walkdir::WalkDir;
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
+/// Get actual disk usage for a file (handles sparse files correctly)
+/// Returns blocks * 512 instead of apparent size
+#[cfg(unix)]
+fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    metadata.blocks() * 512
+}
+
+#[cfg(not(unix))]
+fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    metadata.len()
+}
+
 #[derive(Clone, Debug)]
 pub struct DirEntry {
     pub path: PathBuf,
@@ -59,7 +74,7 @@ pub fn scan_directory(
                     size
                 }
             } else {
-                metadata.len()
+                disk_usage(&metadata)
             };
 
             Some(DirEntry {
@@ -93,7 +108,7 @@ fn quick_dir_size(path: &std::path::Path) -> u64 {
     {
         if let Ok(metadata) = entry.metadata() {
             if metadata.is_file() {
-                total += metadata.len();
+                total += disk_usage(&metadata);
             }
         }
     }
