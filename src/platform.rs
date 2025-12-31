@@ -19,7 +19,7 @@ pub fn get_disk_space(path: &Path) -> Option<DiskSpace> {
             // IMPORTANT: Use fragment_size() (f_frsize), NOT block_size() (f_bsize)!
             // f_frsize is the fundamental filesystem block size (usually 4KB)
             // f_bsize is the preferred I/O block size (can be 1MB on APFS, giving wrong results!)
-            let fragment_size = stat.fragment_size() as u64;
+            let fragment_size = stat.fragment_size();
             let total_blocks = stat.blocks() as u64;
             let free_blocks = stat.blocks_free() as u64; // Total free (includes reserved)
             let available_blocks = stat.blocks_available() as u64; // Available to user

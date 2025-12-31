@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub enum ModalType {
@@ -20,10 +20,10 @@ pub struct Modal {
 }
 
 impl Modal {
-    pub fn confirm_delete(path: &PathBuf, size: u64) -> Self {
+    pub fn confirm_delete(path: &Path, size: u64) -> Self {
         Modal {
             modal_type: ModalType::ConfirmDelete {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 size,
             },
             selected_button: 0,
@@ -35,10 +35,10 @@ impl Modal {
         }
     }
 
-    pub fn final_confirm(path: &PathBuf, size: u64) -> Self {
+    pub fn final_confirm(path: &Path, size: u64) -> Self {
         Modal {
             modal_type: ModalType::FinalConfirm {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 size,
             },
             selected_button: 1, // Default to Cancel for safety

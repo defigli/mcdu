@@ -47,12 +47,10 @@ pub fn delete_directory(path: &PathBuf) -> Result<DeleteResult, Box<dyn std::err
             } else {
                 errors.push(format!("Failed to delete {}", entry.path.display()));
             }
+        } else if fs::remove_dir(&entry.path).is_ok() {
+            total_files += 1;
         } else {
-            if fs::remove_dir(&entry.path).is_ok() {
-                total_files += 1;
-            } else {
-                errors.push(format!("Failed to delete {}", entry.path.display()));
-            }
+            errors.push(format!("Failed to delete {}", entry.path.display()));
         }
     }
 
