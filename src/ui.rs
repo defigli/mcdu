@@ -55,7 +55,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 }
 
 fn draw_title(f: &mut Frame, app: &App, area: Rect) {
-    let title_text = format!(" 📊 mcdu v0.2.0 | {} ", app.current_path.display());
+    let title_text = format!(" 📊 mcdu v{} | {} ", env!("CARGO_PKG_VERSION"), app.current_path.display());
 
     let right_text = if app.is_scanning {
         "  ⟳ Scanning... ".to_string()
@@ -607,7 +607,7 @@ pub fn draw_help(f: &mut Frame) {
     let help_widget = Paragraph::new(help_text)
         .block(
             Block::default()
-                .title(" 🎯 HELP - mcdu v0.2.0 ")
+                .title(format!(" 🎯 HELP - mcdu v{} ", env!("CARGO_PKG_VERSION")))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         )
