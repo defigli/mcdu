@@ -133,7 +133,8 @@ fn handle_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
         KeyCode::Backspace | KeyCode::Left | KeyCode::Char('h') => app.go_parent(),
         KeyCode::Char('d') => app.open_delete_modal(),
         KeyCode::Char('?') => app.toggle_help(),
-        KeyCode::Char('r') | KeyCode::Char('c') => app.refresh(), // Rescan tree
+        KeyCode::Char('r') | KeyCode::Char('c') => app.refresh(), // Rescan full tree
+        KeyCode::Char('R') => app.rescan_selected(), // Rescan selected directory only
         _ => {}
     }
 

@@ -46,6 +46,7 @@ pub struct App {
     pub is_scanning: bool,
     pub scan_files_count: usize,
     pub scanning_path: Option<String>,
+    pub rescan_target: Option<(Vec<usize>, usize)>,  // (nav_stack, child_index) for subtree rescan
     // Disk space info
     pub disk_space: Option<DiskSpace>,
 }
@@ -103,6 +104,7 @@ impl App {
             is_scanning: false,
             scan_files_count: 0,
             scanning_path: None,
+            rescan_target: None,
             disk_space,
         };
         app.start_scan();
@@ -231,6 +233,44 @@ impl App {
         }
     }
 
+    /// Replace a subtree with a newly scanned one and update sizes
+    fn replace_subtree(&mut self, nav_stack: Vec<usize>, child_idx: usize, new_tree: FileNode) {
+        let Some(tree) = self.tree.as_mut() else { return };
+
+        // Navigate to the parent node
+        let mut node = tree;
+        for &idx in &nav_stack {
+            node = &mut node.children[idx];
+        }
+
+        if child_idx >= node.children.len() {
+            return;
+        }
+
+        // Calculate size difference
+        let old_size = node.children[child_idx].size;
+        let new_size = new_tree.size;
+        let size_diff = new_size as i64 - old_size as i64;
+
+        // Replace the subtree
+        node.children[child_idx] = new_tree;
+
+        // Re-sort children by size
+        node.children.sort_by(|a, b| b.size.cmp(&a.size));
+
+        // Update sizes up the tree
+        if size_diff != 0 {
+            let tree = self.tree.as_mut().unwrap();
+            tree.size = (tree.size as i64 + size_diff) as u64;
+
+            let mut parent = tree;
+            for &idx in &nav_stack {
+                parent.size = (parent.size as i64 + size_diff) as u64;
+                parent = &mut parent.children[idx];
+            }
+        }
+    }
+
     /// Remove a deleted entry from the tree and update sizes up the tree
     fn remove_entry_from_tree(&mut self, path: &std::path::Path) {
         let Some(tree) = self.tree.as_mut() else { return };
@@ -302,7 +342,52 @@ impl App {
         self.nav_stack.clear();
         self.selected_index = 0;
         self.scroll_offset = 0;
+        self.rescan_target = None;
         self.start_scan();
+    }
+
+    /// Rescan just the selected directory (subtree only)
+    pub fn rescan_selected(&mut self) {
+        if self.is_scanning || self.tree.is_none() {
+            return;
+        }
+
+        let entries = self.get_display_entries();
+        let Some(entry) = entries.get(self.selected_index) else { return };
+
+        if !entry.is_dir || entry.name == ".." {
+            self.notification = Some("Select a directory to rescan".to_string());
+            self.notification_time = Some(Instant::now());
+            return;
+        }
+
+        // Find the child index in the current node
+        let Some(current) = self.get_current_node() else { return };
+        let Some(child_idx) = current.children.iter().position(|c| c.path == entry.path) else { return };
+
+        // Store where to put the result
+        self.rescan_target = Some((self.nav_stack.clone(), child_idx));
+
+        // Start scan of just this subtree
+        let path = entry.path.clone();
+        let (tx, rx) = mpsc::channel();
+
+        let handle = thread::spawn(move || {
+            match scan_tree(&path, Some(tx.clone())) {
+                Ok(tree) => {
+                    let _ = tx.send(ScanProgress::Complete(tree));
+                }
+                Err(e) => {
+                    let _ = tx.send(ScanProgress::Error(e));
+                }
+            }
+        });
+
+        self.scan_thread = Some(handle);
+        self.scan_rx = Some(rx);
+        self.is_scanning = true;
+        self.scan_files_count = 0;
+        self.scanning_path = None;
     }
 
     pub fn update_scan_progress(&mut self) {
@@ -313,12 +398,22 @@ impl App {
                         self.scan_files_count = files_scanned;
                         self.scanning_path = Some(current_path);
                     }
-                    ScanProgress::Complete(tree) => {
-                        self.tree = Some(tree);
+                    ScanProgress::Complete(new_tree) => {
                         self.is_scanning = false;
                         self.scan_thread = None;
                         self.scan_rx = None;
                         self.scanning_path = None;
+
+                        // Check if this is a subtree rescan
+                        if let Some((nav_stack, child_idx)) = self.rescan_target.take() {
+                            self.replace_subtree(nav_stack, child_idx, new_tree);
+                            self.notification = Some("✓ Subtree rescanned".to_string());
+                            self.notification_time = Some(Instant::now());
+                        } else {
+                            // Full tree scan
+                            self.tree = Some(new_tree);
+                        }
+
                         self.disk_space = platform::get_disk_space(&self.root_path);
                         break;
                     }
