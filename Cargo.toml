@@ -1,6 +1,6 @@
 [package]
 name = "mcdu"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "A modern disk usage analyzer with a terminal UI, inspired by ncdu"
 license = "MIT"
