@@ -2,6 +2,11 @@
 name = "mcdu"
 version = "0.3.0"
 edition = "2021"
+description = "A modern disk usage analyzer with a terminal UI, inspired by ncdu"
+license = "MIT"
+repository = "https://github.com/mikalv/mcdu"
+keywords = ["disk", "usage", "tui", "ncdu", "terminal"]
+categories = ["command-line-utilities", "filesystem"]
 
 [dependencies]
 ratatui = "0.28"
