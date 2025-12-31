@@ -213,7 +213,7 @@ fn draw_footer(f: &mut Frame, area: Rect) {
     );
 
     // Center: main actions
-    let main_text = "[d] Delete  [r] Refresh  [?] Help";
+    let main_text = "[d] Delete  [r] Rescan  [R] Rescan all  [?] Help";
     f.render_widget(
         Paragraph::new(main_text)
             .style(Style::default().fg(Color::Gray))
@@ -502,7 +502,8 @@ pub fn draw_help(f: &mut Frame) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::from("  r                   Rescan directory tree"),
+        Line::from("  r                   Rescan selected directory"),
+        Line::from("  R / c               Rescan entire tree"),
         Line::from("  ?                   Show this help screen"),
         Line::from("  q / Esc             Quit application"),
         Line::from(""),
