@@ -33,15 +33,52 @@ A fast, modern, and safe disk usage analyzer with integrated file deletion capab
 
 ## 📥 Installation
 
+### Cargo (crates.io)
+
 ```bash
-# Build from source
+cargo install mcdu
+```
+
+### Homebrew (macOS)
+
+```bash
+brew tap mikalv/mcdu
+brew install mcdu
+```
+
+### Arch Linux (AUR)
+
+```bash
+# Using yay
+yay -S mcdu
+
+# Or using paru
+paru -S mcdu
+```
+
+### Debian/Ubuntu
+
+Download the latest `.deb` package from [GitHub Releases](https://github.com/mikalv/mcdu/releases) and install:
+
+```bash
+sudo dpkg -i mcdu_*.deb
+```
+
+### Fedora/RHEL
+
+Download the latest `.rpm` package from [GitHub Releases](https://github.com/mikalv/mcdu/releases) and install:
+
+```bash
+sudo rpm -i mcdu-*.rpm
+```
+
+### Building from Source
+
+```bash
+git clone https://github.com/mikalv/mcdu.git
+cd mcdu
 cargo build --release
-
-# Run
 ./target/release/mcdu
-
-# Optional: Install to system
-cargo install --path .
 ```
 
 ## 🎮 Usage
@@ -52,8 +89,8 @@ cargo install --path .
 - `Enter/→/l` - Enter directory
 - `Backspace/←/h` - Go to parent directory
 - `d` - Delete selected file/directory
-- `r` - Refresh current view (uses cache)
-- `c` - Clear cache and hard refresh
+- `r` - Rescan selected directory and subdirectories
+- `R/c` - Rescan entire tree from root
 - `?` - Show help screen
 - `q/Esc` - Quit application
 
@@ -69,11 +106,11 @@ cargo install --path .
 ### Dry-run Mode
 Press `d` on target, then select `[d] Dry-run` to see what would be deleted without actually deleting anything.
 
-### Cache Management
-- **`r`** - Refresh (uses cache for speed)
-- **`c`** - Clear cache and rescan (force accurate sizes)
+### Rescanning
+- **`r`** - Rescan selected directory and all subdirectories
+- **`R/c`** - Rescan entire tree from root
 
-The cache automatically invalidates based on directory modification times, ensuring you see up-to-date information.
+The tree is kept in memory for instant navigation. Use `r` for quick partial updates after changes, or `R` for a full rescan.
 
 ## 🖥️ UI Design
 
