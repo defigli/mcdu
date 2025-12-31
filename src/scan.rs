@@ -82,16 +82,11 @@ pub fn scan_directory(
 }
 
 fn quick_dir_size(path: &std::path::Path) -> u64 {
-    // Optimized size calculation with early termination for huge directories
+    // Calculate total size of all files in directory
     // Uses DirEntry's metadata when available to avoid double stat calls
     let mut total = 0u64;
-    const MAX_FILES: usize = 100_000; // Increased from 50k for better accuracy
 
-    for entry in WalkDir::new(path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .take(MAX_FILES)
-    {
+    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
         // Get file size from metadata already loaded by WalkDir
         if let Ok(metadata) = entry.metadata() {
             if metadata.is_file() {

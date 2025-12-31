@@ -21,11 +21,15 @@ pub fn get_disk_space(path: &Path) -> Option<DiskSpace> {
             // f_bsize is the preferred I/O block size (can be 1MB on APFS, giving wrong results!)
             let fragment_size = stat.fragment_size() as u64;
             let total_blocks = stat.blocks() as u64;
-            let available_blocks = stat.blocks_available() as u64;
+            let free_blocks = stat.blocks_free() as u64; // Total free (includes reserved)
+            let available_blocks = stat.blocks_available() as u64; // Available to user
 
             let total_bytes = total_blocks * fragment_size;
+            let free_bytes = free_blocks * fragment_size;
             let available_bytes = available_blocks * fragment_size;
-            let used_bytes = total_bytes.saturating_sub(available_bytes);
+            // Use free_bytes (not available_bytes) for accurate "used" calculation
+            // This correctly accounts for reserved space (e.g., 5% reserved for root on ext4)
+            let used_bytes = total_bytes.saturating_sub(free_bytes);
 
             Some(DiskSpace {
                 total_bytes,

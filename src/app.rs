@@ -395,7 +395,7 @@ impl App {
                 let msg = format!(
                     "Dry-run: Would delete {} files ({:.1} MB)",
                     files.len(),
-                    total_size as f64 / 1_000_000.0
+                    total_size as f64 / 1_048_576.0 // Binary MB (1024²)
                 );
 
                 // Log the dry-run
@@ -456,7 +456,7 @@ impl App {
                     let msg = format!(
                         "✓ Deleted {} files ({:.1} MB)",
                         total_files,
-                        total_bytes as f64 / 1_000_000.0
+                        total_bytes as f64 / 1_048_576.0 // Binary MB (1024²)
                     );
                     self.notification = Some(msg);
                     self.notification_time = Some(Instant::now());
