@@ -1,0 +1,15 @@
+pkgbase = mcdu
+	pkgdesc = Modern disk usage analyzer with terminal UI, inspired by ncdu
+	pkgver = 0.3.5
+	pkgrel = 1
+	url = https://github.com/mikalv/mcdu
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = gcc-libs
+	source = mcdu-0.3.5.tar.gz::https://github.com/mikalv/mcdu/archive/refs/tags/v0.3.5.tar.gz
+	sha256sums = SKIP
+
+pkgname = mcdu

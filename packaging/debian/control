@@ -1,0 +1,24 @@
+Source: mcdu
+Section: utils
+Priority: optional
+Maintainer: Mikal Villa <m@meeh.dev>
+Build-Depends: debhelper-compat (= 13), cargo, rustc
+Standards-Version: 4.6.0
+Homepage: https://github.com/mikalv/mcdu
+Vcs-Browser: https://github.com/mikalv/mcdu
+Vcs-Git: https://github.com/mikalv/mcdu.git
+Rules-Requires-Root: no
+
+Package: mcdu
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Modern disk usage analyzer with terminal UI
+ mcdu is a modern disk usage analyzer inspired by ncdu.
+ It provides a fast, interactive terminal interface for
+ exploring disk usage and safely deleting files.
+ .
+ Features:
+  - Fast directory scanning with progress display
+  - Instant navigation (full tree in memory)
+  - Safe file deletion with confirmation
+  - Size change detection between scans

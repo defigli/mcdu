@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_install:
+	install -Dm755 target/release/mcdu debian/mcdu/usr/bin/mcdu
+
+override_dh_auto_test:
+	cargo test --release --locked
