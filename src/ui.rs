@@ -45,7 +45,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // Loading overlay if scanning
     if app.is_scanning {
-        draw_loading(f, app.scanning_name.as_deref(), app.scan_progress);
+        draw_loading(f, app.scan_files_count, app.scanning_path.as_deref());
     }
 
     // Help screen if shown
@@ -55,13 +55,13 @@ pub fn draw(f: &mut Frame, app: &App) {
 }
 
 fn draw_title(f: &mut Frame, app: &App, area: Rect) {
-    let title_text = format!(" 📊 mcdu v{} | {} ", env!("CARGO_PKG_VERSION"), app.current_path.display());
+    let current_path = app.get_current_path();
+    let title_text = format!(" 📊 mcdu v{} | {} ", env!("CARGO_PKG_VERSION"), current_path.display());
 
     let right_text = if app.is_scanning {
-        "  ⟳ Scanning... ".to_string()
+        format!("  ⟳ Scanning... {} files ", app.scan_files_count)
     } else {
-        let cache_size = app.size_cache.size();
-        let mut info = format!("  {} items | {} cached", app.entries.len(), cache_size);
+        let mut info = format!("  {} items", app.entries_count());
 
         // Add disk space if available
         if let Some(ref disk) = app.disk_space {
@@ -114,24 +114,25 @@ fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
     let mut lines = Vec::new();
 
     // Path display
-    lines.push(Line::from(format!("Path: {}", app.current_path.display())));
+    let current_path = app.get_current_path();
+    lines.push(Line::from(format!("Path: {}", current_path.display())));
     lines.push(Line::from("".to_string()));
 
-    // Calculate viewport bounds
-    let viewport_height = area.height.saturating_sub(4) as usize; // Subtract borders and header
-    let start_idx = app.scroll_offset;
-    let end_idx = (start_idx + viewport_height).min(app.entries.len());
+    let entries = app.get_display_entries();
 
-    let total_size: u64 = app
-        .entries
+    // Calculate viewport bounds
+    let viewport_height = area.height.saturating_sub(4) as usize;
+    let start_idx = app.scroll_offset;
+    let end_idx = (start_idx + viewport_height).min(entries.len());
+
+    let total_size: u64 = entries
         .iter()
         .filter(|entry| entry.name != "..")
         .map(|entry| entry.size)
         .sum();
 
     // Directory entries - only render visible items
-    for (idx, entry) in app
-        .entries
+    for (idx, entry) in entries
         .iter()
         .enumerate()
         .skip(start_idx)
@@ -154,56 +155,18 @@ fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
         let size_color = get_color_by_size(entry.size);
         let name_prefix = if entry.is_dir { "📁 " } else { "📄 " };
 
-        // Check for size changes
-        let (name_style, change_indicator) = if let Some((delta, percent)) = entry.size_change {
-            let change_style = if delta > 0 {
-                // Size increased - highlight in yellow/red
-                if is_selected {
-                    Style::default()
-                        .bg(Color::Yellow)
-                        .fg(Color::Black)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
-                }
-            } else {
-                // Size decreased - blue tint
-                if is_selected {
-                    Style::default()
-                        .bg(Color::Cyan)
-                        .fg(Color::Black)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD)
-                }
-            };
-
-            let indicator = if delta > 0 {
-                format!(" ⬆ {}%", percent.abs() as i32)
-            } else {
-                format!(" ⬇ {}%", percent.abs() as i32)
-            };
-
-            (change_style, indicator)
+        let name_style = if is_selected {
+            Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
         } else {
-            let name_style = if is_selected {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            (name_style, String::new())
+            Style::default().fg(Color::White)
         };
 
         let size_style = Style::default().fg(size_color).add_modifier(Modifier::BOLD);
 
-        let mut line_spans = vec![
+        let line_spans = vec![
             Span::styled(
                 format!(
                     "{}{:<25}",
@@ -219,17 +182,6 @@ fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::raw(format!("  {} ", percent_bar)),
         ];
-
-        if !change_indicator.is_empty() {
-            line_spans.push(Span::styled(change_indicator, name_style));
-        }
-
-        if entry.file_count > 1 {
-            line_spans.push(Span::styled(
-                format!("({} items)", entry.file_count),
-                Style::default().fg(Color::Gray),
-            ));
-        }
 
         lines.push(Line::from(line_spans));
     }
@@ -261,7 +213,7 @@ fn draw_footer(f: &mut Frame, area: Rect) {
     );
 
     // Center: main actions
-    let main_text = "[d] Delete  [r] Refresh  [c] Clear cache  [?] Help";
+    let main_text = "[d] Delete  [r] Refresh  [?] Help";
     f.render_widget(
         Paragraph::new(main_text)
             .style(Style::default().fg(Color::Gray))
@@ -282,13 +234,11 @@ fn draw_footer(f: &mut Frame, area: Rect) {
 fn draw_modal(f: &mut Frame, modal: &Modal) {
     let centered = centered_rect(60, 30, f.area());
 
-    // Clear the background first to prevent text bleed-through
     f.render_widget(Clear, centered);
 
     let title = modal.get_title();
     let message = modal.get_message();
 
-    // Button line
     let mut button_spans = Vec::new();
     for (idx, (label, _)) in modal.buttons.iter().enumerate() {
         let button_style = if idx == modal.selected_button {
@@ -330,7 +280,6 @@ fn draw_modal(f: &mut Frame, modal: &Modal) {
 fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {
     let centered = centered_rect(70, 40, f.area());
 
-    // Clear the background first to prevent text bleed-through
     f.render_widget(Clear, centered);
 
     let inner_layout = Layout::default()
@@ -342,7 +291,6 @@ fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {
         ])
         .split(centered);
 
-    // Status
     f.render_widget(
         Paragraph::new(format!("🗑️  {}", progress.status)).style(
             Style::default()
@@ -353,7 +301,6 @@ fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {
         inner_layout[0],
     );
 
-    // Progress gauge
     let ratio = if progress.total_bytes > 0 {
         progress.deleted_bytes as f64 / progress.total_bytes as f64
     } else {
@@ -368,7 +315,6 @@ fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {
 
     f.render_widget(gauge, inner_layout[1]);
 
-    // Stats
     let stats = format!(
         "Deleted: {} / {} ({} files)",
         format_size(progress.deleted_bytes),
@@ -381,10 +327,9 @@ fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {
     );
 }
 
-fn draw_loading(f: &mut Frame, scanning_name: Option<&str>, progress: Option<(usize, usize)>) {
+fn draw_loading(f: &mut Frame, files_scanned: usize, scanning_path: Option<&str>) {
     let centered = centered_rect(70, 25, f.area());
 
-    // Clear the background first to prevent text bleed-through
     f.render_widget(Clear, centered);
 
     let mut loading_text = vec![
@@ -392,7 +337,7 @@ fn draw_loading(f: &mut Frame, scanning_name: Option<&str>, progress: Option<(us
         Line::from(vec![
             Span::styled("⟳ ", Style::default().fg(Color::Yellow)),
             Span::styled(
-                "Scanning directory...",
+                "Scanning directory tree...",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -401,35 +346,23 @@ fn draw_loading(f: &mut Frame, scanning_name: Option<&str>, progress: Option<(us
         Line::from(""),
     ];
 
-    // Show progress counter if available
-    if let Some((scanned, total)) = progress {
-        let percent = if total > 0 {
-            (scanned as f64 / total as f64 * 100.0) as usize
-        } else {
-            0
-        };
-        loading_text.push(Line::from(vec![Span::styled(
-            format!("{} / {} items ({}%)", scanned, total, percent),
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )]));
-    } else {
-        loading_text.push(Line::from(vec![Span::styled(
-            "Counting items...",
-            Style::default().fg(Color::Gray),
-        )]));
-    }
+    // Show file count
+    loading_text.push(Line::from(vec![Span::styled(
+        format!("{} files scanned", files_scanned),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )]));
 
     loading_text.push(Line::from(""));
 
-    // Show current name being scanned, truncated to fit
-    if let Some(name) = scanning_name {
+    // Show current path being scanned
+    if let Some(path) = scanning_path {
         let max_width = (f.area().width as usize).saturating_sub(10);
-        let truncated = if name.len() > max_width {
-            format!("...{}", &name[name.len().saturating_sub(max_width - 3)..])
+        let truncated = if path.len() > max_width {
+            format!("...{}", &path[path.len().saturating_sub(max_width - 3)..])
         } else {
-            name.to_string()
+            path.to_string()
         };
 
         loading_text.push(Line::from(vec![Span::styled(
@@ -519,7 +452,6 @@ fn create_bar(current: u64, max: u64) -> String {
 fn draw_notification(f: &mut Frame, notif: &str) {
     let centered = centered_rect(60, 10, f.area());
 
-    // Clear the background first to prevent text bleed-through
     f.render_widget(Clear, centered);
 
     let notification_widget = Paragraph::new(notif)
@@ -539,7 +471,6 @@ fn draw_notification(f: &mut Frame, notif: &str) {
 pub fn draw_help(f: &mut Frame) {
     let centered = centered_rect(80, 90, f.area());
 
-    // Clear the background first to prevent text bleed-through
     f.render_widget(Clear, centered);
 
     let help_text = vec![
@@ -571,8 +502,7 @@ pub fn draw_help(f: &mut Frame) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::from("  r                   Refresh current directory (uses cache)"),
-        Line::from("  c                   Clear cache and hard refresh"),
+        Line::from("  r                   Rescan directory tree"),
         Line::from("  ?                   Show this help screen"),
         Line::from("  q / Esc             Quit application"),
         Line::from(""),

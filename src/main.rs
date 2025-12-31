@@ -1,12 +1,15 @@
 mod app;
-mod cache;
-mod changes;
 mod delete;
 mod logger;
 mod modal;
 mod platform;
-mod scan;
+mod tree;
 mod ui;
+
+// Unused modules kept for potential future use:
+// mod cache;
+// mod changes;
+// mod scan;
 
 use app::App;
 use crossterm::{
@@ -130,8 +133,7 @@ fn handle_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
         KeyCode::Backspace | KeyCode::Left | KeyCode::Char('h') => app.go_parent(),
         KeyCode::Char('d') => app.open_delete_modal(),
         KeyCode::Char('?') => app.toggle_help(),
-        KeyCode::Char('r') => app.refresh(),
-        KeyCode::Char('c') => app.hard_refresh(), // 'c' to clear cache and refresh
+        KeyCode::Char('r') | KeyCode::Char('c') => app.refresh(), // Rescan tree
         _ => {}
     }
 
