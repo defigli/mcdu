@@ -1,19 +1,22 @@
 use crate::delete;
+use crate::cleanup;
 use crate::logger;
 use crate::modal::Modal;
 use crate::platform::{self, DiskSpace};
 use crate::tree::{scan_tree, FileNode, ScanProgress};
 use chrono::Local;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
     Browsing,
     Deleting,
     DryRun,
+    Cleanup,
 }
 
 pub struct DeleteProgress {
@@ -49,6 +52,15 @@ pub struct App {
     pub rescan_target: Option<(Vec<usize>, usize)>,  // (nav_stack, child_index) for subtree rescan
     // Disk space info
     pub disk_space: Option<DiskSpace>,
+    // Cleanup feature
+    pub cleanup_candidates: Vec<crate::cleanup::rules::Candidate>,
+    pub cleanup_selected: std::collections::HashSet<std::path::PathBuf>,
+    pub cleanup_selected_index: usize,
+    pub cleanup_scan_thread: Option<std::thread::JoinHandle<Vec<crate::cleanup::rules::Candidate>>>,
+    pub cleanup_scan_rx: Option<std::sync::mpsc::Receiver<crate::cleanup::scanner::ScanProgress>>,
+    pub cleanup_scanning: bool,
+    pub cleanup_scan_progress: Option<crate::cleanup::scanner::ScanProgress>,
+    pub cleanup_delete_thread: Option<std::thread::JoinHandle<crate::cleanup::executor::CleanupResult>>,
 }
 
 pub enum DeleteProgressUpdate {
@@ -106,6 +118,14 @@ impl App {
             scanning_path: None,
             rescan_target: None,
             disk_space,
+            cleanup_candidates: Vec::new(),
+            cleanup_selected: HashSet::new(),
+            cleanup_selected_index: 0,
+            cleanup_scan_thread: None,
+            cleanup_scan_rx: None,
+            cleanup_scanning: false,
+            cleanup_scan_progress: None,
+            cleanup_delete_thread: None,
         };
         app.start_scan();
         app
@@ -443,6 +463,195 @@ impl App {
         self.show_help = !self.show_help;
     }
 
+    pub fn start_cleanup_scan(&mut self) -> Result<(), String> {
+        let platform_paths = cleanup::platform::PlatformPaths::detect()
+            .ok_or_else(|| "Unable to detect platform paths".to_string())?;
+        let config_paths = cleanup::config::default_config_paths(&platform_paths);
+        let config = cleanup::config::load_config(&config_paths).map_err(|e| e.to_string())?;
+        let state = cleanup::config::load_state(&config_paths).map_err(|e| e.to_string())?;
+        self.cleanup_selected = state
+            .selected
+            .into_iter()
+            .map(PathBuf::from)
+            .collect();
+        self.cleanup_selected_index = 0;
+
+        let (tx, rx) = mpsc::channel();
+        let config_clone = config.clone();
+        let platform_clone = platform_paths.clone();
+        let handle = thread::spawn(move || {
+            cleanup::scanner::scan(
+                &config_clone,
+                &platform_clone,
+                Some(tx),
+                std::time::SystemTime::now(),
+            )
+        });
+
+        self.cleanup_scan_thread = Some(handle);
+        self.cleanup_scan_rx = Some(rx);
+        self.cleanup_scanning = true;
+        self.notification = Some("Starting cleanup scan...".to_string());
+        self.notification_time = Some(Instant::now());
+        self.mode = AppMode::Cleanup;
+        Ok(())
+    }
+
+    pub fn update_cleanup_scan(&mut self) {
+        if let Some(rx) = self.cleanup_scan_rx.as_mut() {
+            while let Ok(progress) = rx.try_recv() {
+                self.cleanup_scan_progress = Some(progress);
+            }
+        }
+
+        if let Some(handle) = self.cleanup_scan_thread.as_ref() {
+            if handle.is_finished() {
+                let handle = self.cleanup_scan_thread.take().unwrap();
+                if let Ok(results) = handle.join() {
+                    self.cleanup_candidates = results;
+                    self.cleanup_scanning = false;
+                    self.cleanup_scan_progress = None;
+                    self.apply_selection_and_save();
+                    self.notification = Some(format!(
+                        "Cleanup scan complete: {} candidates",
+                        self.cleanup_candidates.len()
+                    ));
+                    self.notification_time = Some(Instant::now());
+                }
+                self.cleanup_scan_rx = None;
+            }
+        }
+    }
+
+    pub fn block_on_cleanup_scan(&mut self) {
+        while self.cleanup_scanning {
+            self.update_cleanup_scan();
+            if self.cleanup_scanning {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    fn apply_selection_and_save(&mut self) {
+        // Retain only candidates that still exist
+        let candidate_paths: HashSet<PathBuf> = self
+            .cleanup_candidates
+            .iter()
+            .map(|c| c.path.clone())
+            .collect();
+        self.cleanup_selected
+            .retain(|p| candidate_paths.contains(p));
+        if self.cleanup_selected.is_empty() {
+            self.cleanup_selected = candidate_paths;
+        }
+
+        let platform_paths = match cleanup::platform::PlatformPaths::detect() {
+            Some(p) => p,
+            None => return,
+        };
+        let config_paths = cleanup::config::default_config_paths(&platform_paths);
+        let state = cleanup::config::CleanupState {
+            selected: self
+                .cleanup_selected
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
+            dismissed: Vec::new(),
+        };
+        let _ = cleanup::config::save_state(&config_paths, &state);
+    }
+
+    pub fn cleanup_entries(&self) -> &[cleanup::rules::Candidate] {
+        &self.cleanup_candidates
+    }
+
+    pub fn select_next_cleanup(&mut self) {
+        if self.cleanup_selected_index + 1 < self.cleanup_candidates.len() {
+            self.cleanup_selected_index += 1;
+        }
+    }
+
+    pub fn select_previous_cleanup(&mut self) {
+        if self.cleanup_selected_index > 0 {
+            self.cleanup_selected_index -= 1;
+        }
+    }
+
+    pub fn toggle_cleanup_selection(&mut self) {
+        if let Some(item) = self.cleanup_candidates.get(self.cleanup_selected_index) {
+            if self.cleanup_selected.contains(&item.path) {
+                self.cleanup_selected.remove(&item.path);
+            } else {
+                self.cleanup_selected.insert(item.path.clone());
+            }
+            self.apply_selection_and_save();
+        }
+    }
+
+    pub fn select_all_cleanup(&mut self) {
+        self.cleanup_selected = self
+            .cleanup_candidates
+            .iter()
+            .map(|c| c.path.clone())
+            .collect();
+        self.apply_selection_and_save();
+    }
+
+    pub fn select_none_cleanup(&mut self) {
+        self.cleanup_selected.clear();
+        self.apply_selection_and_save();
+    }
+
+    pub fn start_cleanup_delete(&mut self) {
+        let selected = if self.cleanup_selected.is_empty() {
+            self.cleanup_candidates.clone()
+        } else {
+            self.cleanup_candidates
+                .iter()
+                .cloned()
+                .filter(|c| self.cleanup_selected.contains(&c.path))
+                .collect()
+        };
+
+        let handle = cleanup::executor::execute_async(selected, None);
+        self.cleanup_delete_thread = Some(handle);
+        self.notification = Some("Starting cleanup delete...".to_string());
+        self.notification_time = Some(Instant::now());
+    }
+
+    pub fn update_cleanup_delete(&mut self) {
+        if let Some(handle) = self.cleanup_delete_thread.as_ref() {
+            if handle.is_finished() {
+                let handle = self.cleanup_delete_thread.take().unwrap();
+                if let Ok(result) = handle.join() {
+                    if result.errors.is_empty() {
+                        self.notification = Some(format!(
+                            "Cleanup deleted files, freed {} bytes",
+                            result.freed_bytes
+                        ));
+                    } else {
+                        self.notification = Some(format!(
+                            "Cleanup completed with {} errors",
+                            result.errors.len()
+                        ));
+                    }
+                    self.notification_time = Some(Instant::now());
+                    self.mode = AppMode::Browsing;
+                }
+            }
+        }
+    }
+
+    pub fn block_on_cleanup_delete(&mut self) {
+        loop {
+            self.update_cleanup_delete();
+            if self.cleanup_delete_thread.is_none() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     pub fn start_delete(&mut self, path: &std::path::Path) -> Result<(), String> {
         let path_clone = path.to_path_buf();
         let (tx, rx) = mpsc::channel();
@@ -607,5 +816,90 @@ impl App {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use std::fs;
+    use std::io::Write;
+    use tempfile::tempdir;
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn setup_env(tmp: &tempfile::TempDir) -> crate::cleanup::platform::PlatformPaths {
+        let home = tmp.path().join("home");
+        let cache = home.join(".cache");
+        let config = home.join(".config");
+        fs::create_dir_all(&cache).unwrap();
+        fs::create_dir_all(&config).unwrap();
+        std::env::set_var("HOME", &home);
+        std::env::set_var("XDG_CACHE_HOME", &cache);
+        std::env::set_var("XDG_CONFIG_HOME", &config);
+        crate::cleanup::platform::PlatformPaths::detect().unwrap()
+    }
+
+    fn write_simple_config(paths: &crate::cleanup::platform::PlatformPaths) {
+        let config_dir = paths.config_dir.join("mcdu");
+        fs::create_dir_all(&config_dir).unwrap();
+        let config = r#"
+scan_paths = ["${CACHE_DIR}"]
+
+[[rules]]
+name = "all"
+category = "test"
+path = "${CACHE_DIR}"
+pattern = "**/*"
+enabled = true
+risky = false
+"#;
+        fs::write(config_dir.join("cleanup.toml"), config).unwrap();
+    }
+
+    #[test]
+    fn cleanup_scan_populates_candidates_and_saves_state() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let tmp = tempdir().unwrap();
+        let paths = setup_env(&tmp);
+        write_simple_config(&paths);
+
+        let cache_file = paths.cache_dir.join("file.tmp");
+        fs::create_dir_all(cache_file.parent().unwrap()).unwrap();
+        let mut f = fs::File::create(&cache_file).unwrap();
+        writeln!(f, "hello").unwrap();
+
+        let mut app = App::new();
+        app.start_cleanup_scan().unwrap();
+        app.block_on_cleanup_scan();
+
+        assert_eq!(app.cleanup_candidates.len(), 1);
+        assert_eq!(app.cleanup_candidates[0].path, cache_file);
+
+        let state_path = crate::cleanup::config::default_config_paths(&paths).state_file;
+        let state_contents = fs::read_to_string(state_path).unwrap();
+        let state: crate::cleanup::config::CleanupState = toml::from_str(&state_contents).unwrap();
+        assert_eq!(state.selected.len(), 1);
+    }
+
+    #[test]
+    fn cleanup_delete_removes_selected() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let tmp = tempdir().unwrap();
+        let paths = setup_env(&tmp);
+        write_simple_config(&paths);
+
+        let cache_file = paths.cache_dir.join("file.tmp");
+        fs::create_dir_all(cache_file.parent().unwrap()).unwrap();
+        fs::write(&cache_file, "hello").unwrap();
+
+        let mut app = App::new();
+        app.start_cleanup_scan().unwrap();
+        app.block_on_cleanup_scan();
+        app.cleanup_selected.insert(cache_file.clone());
+
+        app.start_cleanup_delete();
+        app.block_on_cleanup_delete();
+
+        assert!(!cache_file.exists());
     }
 }

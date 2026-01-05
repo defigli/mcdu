@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, AppMode};
 use crate::modal::Modal;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -23,7 +23,10 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_title(f, app, chunks[0]);
 
     // Main content area
-    draw_browser(f, app, chunks[1]);
+    match app.mode {
+        AppMode::Cleanup => draw_cleanup(f, app, chunks[1]),
+        _ => draw_browser(f, app, chunks[1]),
+    }
 
     // Help/status bar
     draw_footer(f, chunks[2]);
@@ -46,6 +49,12 @@ pub fn draw(f: &mut Frame, app: &App) {
     // Loading overlay if scanning
     if app.is_scanning {
         draw_loading(f, app.scan_files_count, app.scanning_path.as_deref());
+    }
+
+    // Cleanup scanning overlay
+    if app.cleanup_scanning {
+        let count = app.cleanup_scan_progress.as_ref().map(|p| p.found_count as usize);
+        draw_cleanup_loading(f, count);
     }
 
     // Help screen if shown
@@ -213,7 +222,7 @@ fn draw_footer(f: &mut Frame, area: Rect) {
     );
 
     // Center: main actions
-    let main_text = "[d] Delete  [r] Rescan  [R] Rescan all  [?] Help";
+    let main_text = "[d] Delete  [r] Rescan  [R] Rescan all  [?] Help  [C] Cleanup";
     f.render_widget(
         Paragraph::new(main_text)
             .style(Style::default().fg(Color::Gray))
@@ -275,6 +284,72 @@ fn draw_modal(f: &mut Frame, modal: &Modal) {
             .alignment(Alignment::Center),
         centered,
     );
+}
+
+fn draw_cleanup_loading(f: &mut Frame, count: Option<usize>) {
+    let area = centered_rect(50, 20, f.area());
+    f.render_widget(Clear, area);
+    let text = match count {
+        Some(c) => format!("Scanning cleanup candidates... found {}", c),
+        None => "Scanning cleanup candidates...".to_string(),
+    };
+    f.render_widget(
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Color::Yellow)),
+        area,
+    );
+}
+
+fn draw_cleanup(f: &mut Frame, app: &App, area: Rect) {
+    let mut lines = Vec::new();
+    lines.push(Line::from("Cleanup candidates"));
+    lines.push(Line::from("".to_string()));
+
+    let entries = app.cleanup_entries();
+    let viewport_height = area.height.saturating_sub(4) as usize;
+    let start_idx = app.cleanup_selected_index.saturating_sub(viewport_height / 2);
+    let end_idx = (start_idx + viewport_height).min(entries.len());
+
+    for (idx, entry) in entries.iter().enumerate().skip(start_idx).take(end_idx - start_idx) {
+        let selected = app.cleanup_selected.contains(&entry.path);
+        let cursor = idx == app.cleanup_selected_index;
+        let mark = if selected { "[x]" } else { "[ ]" };
+        let name = entry
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("(unknown)");
+        let size = format_size(entry.size_bytes);
+        let rule = &entry.rule_name;
+        let mut spans = vec![Span::raw(format!("{} {}", mark, name))];
+        spans.push(Span::styled(
+            format!(" {:>8}", size),
+            Style::default().fg(Color::Green),
+        ));
+        spans.push(Span::styled(
+            format!("  ({})", rule),
+            Style::default().fg(Color::Gray),
+        ));
+        let line = Line::from(spans).style(if cursor {
+            Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        });
+        lines.push(line);
+
+        let reason = format!("    matched pattern {}", entry.rule_pattern);
+        lines.push(Line::from(Span::styled(
+            reason,
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("Cleanup (Space toggle, a all, n none, d delete, q back)");
+
+    f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {

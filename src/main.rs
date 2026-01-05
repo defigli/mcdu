@@ -1,4 +1,5 @@
 mod app;
+mod cleanup;
 mod delete;
 mod logger;
 mod modal;
@@ -12,6 +13,8 @@ mod ui;
 // mod scan;
 
 use app::App;
+use app::AppMode;
+use clap::{Parser, Subcommand};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -22,8 +25,29 @@ use std::error::Error;
 use std::io;
 use std::path::PathBuf;
 
+#[derive(Parser)]
+#[command(author, version, about)]
+struct Cli {
+    /// Optional path to start in the TUI
+    #[arg(value_name = "PATH")]
+    path: Option<PathBuf>,
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Cleanup(cleanup::cli::CleanupCommand),
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let start_path = resolve_start_path()?;
+    let cli = Cli::parse();
+
+    if let Some(Commands::Cleanup(cmd)) = cli.command {
+        return cleanup::cli::run_command(cmd).map_err(|e| e.into());
+    }
+
+    let start_path = validate_start_path(cli.path)?;
 
     // Setup terminal
     enable_raw_mode()?;
@@ -52,9 +76,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn resolve_start_path() -> Result<Option<PathBuf>, Box<dyn Error>> {
-    if let Some(arg) = std::env::args().nth(1) {
-        let path = PathBuf::from(arg);
+fn validate_start_path(path: Option<PathBuf>) -> Result<Option<PathBuf>, Box<dyn Error>> {
+    if let Some(path) = path {
         if !path.exists() {
             return Err(format!("Path does not exist: {}", path.display()).into());
         }
@@ -64,6 +87,26 @@ fn resolve_start_path() -> Result<Option<PathBuf>, Box<dyn Error>> {
         Ok(Some(path))
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn validate_start_path_accepts_existing_dir() {
+        let tmp = tempdir().unwrap();
+        let result = validate_start_path(Some(tmp.path().to_path_buf()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_start_path_rejects_missing() {
+        let missing = PathBuf::from("/path/does/not/exist");
+        let result = validate_start_path(Some(missing));
+        assert!(result.is_err());
     }
 }
 
@@ -92,6 +135,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
         // Update delete progress if thread is running
         app.update_delete_progress();
 
+        // Update cleanup scan/delete progress
+        app.update_cleanup_scan();
+        app.update_cleanup_delete();
+
         // Clear notification after 3 seconds
         if let Some(notif_time) = app.notification_time {
             if notif_time.elapsed().as_secs() > 3 {
@@ -105,6 +152,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
 }
 
 fn handle_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
+    if matches!(app.mode, AppMode::Cleanup) {
+        return handle_cleanup_input(app, key);
+    }
+
     // If help is shown, any key closes it
     if app.show_help {
         app.show_help = false;
@@ -135,6 +186,29 @@ fn handle_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
         KeyCode::Char('?') => app.toggle_help(),
         KeyCode::Char('r') => app.rescan_selected(), // Rescan selected directory
         KeyCode::Char('R') | KeyCode::Char('c') => app.refresh(), // Rescan full tree
+        KeyCode::Char('C') => {
+            let _ = app.start_cleanup_scan();
+        }
+        _ => {}
+    }
+
+    Ok(false)
+}
+
+fn handle_cleanup_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => {
+            app.mode = AppMode::Browsing;
+        }
+        KeyCode::Up | KeyCode::Char('k') => app.select_previous_cleanup(),
+        KeyCode::Down | KeyCode::Char('j') => app.select_next_cleanup(),
+        KeyCode::Char(' ') => app.toggle_cleanup_selection(),
+        KeyCode::Char('a') => app.select_all_cleanup(),
+        KeyCode::Char('n') => app.select_none_cleanup(),
+        KeyCode::Char('d') => app.start_cleanup_delete(),
+        KeyCode::Char('C') => {
+            let _ = app.start_cleanup_scan();
+        }
         _ => {}
     }
 
