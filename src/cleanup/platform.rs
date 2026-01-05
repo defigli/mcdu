@@ -65,7 +65,6 @@ pub fn resolve_path(template: &str) -> Option<PathBuf> {
     paths.resolve_path(template)
 }
 
-#[allow(dead_code)]
 pub fn current_platform() -> Platform {
         if cfg!(target_os = "macos") {
             Platform::MacOs
