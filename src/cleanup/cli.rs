@@ -76,7 +76,11 @@ pub fn run_command_with_paths(
         return Ok(());
     }
 
-    let result = crate::cleanup::executor::execute(candidates, None);
+    let git_roots = candidates
+        .iter()
+        .filter_map(|c| c.path.parent().map(|p| p.to_path_buf()))
+        .collect();
+    let result = crate::cleanup::executor::execute(candidates, true, git_roots, None);
     save_state(&config_paths, &state).map_err(|e| e.to_string())?;
     if !result.errors.is_empty() {
         for (path, err) in result.errors {

@@ -13,6 +13,12 @@ pub struct CleanupConfig {
     pub rules: Vec<Rule>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Category {
+    pub name: String,
+    pub rules: Vec<Rule>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct CleanupState {
     #[serde(default)]
@@ -98,6 +104,23 @@ pub fn save_state(paths: &ConfigPaths, state: &CleanupState) -> Result<(), Confi
         .map_err(|e| ConfigError::ReadError(e.to_string()))?;
     file.write_all(serialized.as_bytes())
         .map_err(|e| ConfigError::ReadError(e.to_string()))
+}
+
+pub fn derive_categories(config: &CleanupConfig) -> Vec<Category> {
+    let mut categories: Vec<Category> = Vec::new();
+
+    for rule in &config.rules {
+        if let Some(cat) = categories.iter_mut().find(|c| c.name == rule.category) {
+            cat.rules.push(rule.clone());
+        } else {
+            categories.push(Category {
+                name: rule.category.clone(),
+                rules: vec![rule.clone()],
+            });
+        }
+    }
+
+    categories
 }
 
 #[cfg(test)]
@@ -188,5 +211,54 @@ risky = false
         save_state(&config_paths, &state).unwrap();
         let loaded = load_state(&config_paths).unwrap();
         assert_eq!(loaded, state);
+    }
+
+    #[test]
+    fn derives_categories_from_rules_preserving_order() {
+        let config = CleanupConfig {
+            scan_paths: vec![],
+            rules: vec![
+                Rule {
+                    name: "a".into(),
+                    category: "cat1".into(),
+                    pattern: "**/*".into(),
+                    path: "~/tmp".into(),
+                    signature: None,
+                    min_age_hours: None,
+                    min_size_bytes: None,
+                    risky: false,
+                    enabled: true,
+                },
+                Rule {
+                    name: "b".into(),
+                    category: "cat2".into(),
+                    pattern: "**/*".into(),
+                    path: "~/tmp".into(),
+                    signature: None,
+                    min_age_hours: None,
+                    min_size_bytes: None,
+                    risky: false,
+                    enabled: true,
+                },
+                Rule {
+                    name: "c".into(),
+                    category: "cat1".into(),
+                    pattern: "**/*".into(),
+                    path: "~/tmp".into(),
+                    signature: None,
+                    min_age_hours: None,
+                    min_size_bytes: None,
+                    risky: false,
+                    enabled: true,
+                },
+            ],
+        };
+
+        let cats = derive_categories(&config);
+        assert_eq!(cats.len(), 2);
+        assert_eq!(cats[0].name, "cat1");
+        assert_eq!(cats[0].rules.len(), 2);
+        assert_eq!(cats[1].name, "cat2");
+        assert_eq!(cats[1].rules.len(), 1);
     }
 }

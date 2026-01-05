@@ -3,6 +3,7 @@ use std::process::Command;
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GitProgress {
     pub repo: PathBuf,
     pub completed: bool,

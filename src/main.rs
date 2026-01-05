@@ -152,10 +152,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
 }
 
 fn handle_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
-    if matches!(app.mode, AppMode::Cleanup) {
-        return handle_cleanup_input(app, key);
-    }
-
     // If help is shown, any key closes it
     if app.show_help {
         app.show_help = false;
@@ -165,6 +161,10 @@ fn handle_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Error>> {
     // If modal is open, handle modal input
     if app.modal.is_some() {
         return handle_modal_input(app, key);
+    }
+
+    if matches!(app.mode, AppMode::Cleanup) {
+        return handle_cleanup_input(app, key);
     }
 
     // Normal file browser input
@@ -203,9 +203,11 @@ fn handle_cleanup_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Er
         KeyCode::Up | KeyCode::Char('k') => app.select_previous_cleanup(),
         KeyCode::Down | KeyCode::Char('j') => app.select_next_cleanup(),
         KeyCode::Char(' ') => app.toggle_cleanup_selection(),
+        KeyCode::Enter => app.toggle_cleanup_expand(),
         KeyCode::Char('a') => app.select_all_cleanup(),
         KeyCode::Char('n') => app.select_none_cleanup(),
         KeyCode::Char('d') => app.start_cleanup_delete(),
+        KeyCode::Char('D') => app.start_cleanup_dry_run(),
         KeyCode::Char('C') => {
             let _ = app.start_cleanup_scan();
         }
@@ -248,6 +250,9 @@ fn handle_modal_input(app: &mut App, key: KeyEvent) -> Result<bool, Box<dyn Erro
             KeyCode::Char('y') if modal.has_button("Yes") => {
                 return handle_modal_action(app, modal::ModalAction::Confirm);
             }
+            KeyCode::Char('y') if modal.has_button("YES, CLEANUP") => {
+                return handle_modal_action(app, modal::ModalAction::Confirm);
+            }
             KeyCode::Char('n') if modal.has_button("No") => {
                 return handle_modal_action(app, modal::ModalAction::Cancel);
             }
@@ -275,6 +280,15 @@ fn handle_modal_action(app: &mut App, action: modal::ModalAction) -> Result<bool
                         app.modal = None;
                         app.start_delete(&path)?;
                     }
+                    modal::ModalType::CleanupConfirm { dry_run, .. } => {
+                        app.handle_cleanup_modal_confirm(true);
+                        if dry_run {
+                            return Ok(false);
+                        }
+                    }
+                    modal::ModalType::CleanupFinal { .. } => {
+                        app.handle_cleanup_final_confirm(true);
+                    }
                     #[allow(unreachable_patterns)]
                     _ => {}
                 }
@@ -282,13 +296,20 @@ fn handle_modal_action(app: &mut App, action: modal::ModalAction) -> Result<bool
         }
         modal::ModalAction::DryRun => {
             if let Some(modal) = app.modal.take() {
-                if let modal::ModalType::ConfirmDelete { path, size: _ } = modal.modal_type {
-                    app.start_dry_run(&path)?;
+                match modal.modal_type {
+                    modal::ModalType::ConfirmDelete { path, size: _ } => {
+                        app.start_dry_run(&path)?;
+                    }
+                    modal::ModalType::CleanupConfirm { .. } => {
+                        app.handle_cleanup_modal_confirm(true);
+                    }
+                    _ => {}
                 }
             }
         }
         modal::ModalAction::Cancel => {
             app.modal = None;
+            app.cleanup_pending = None;
         }
     }
 

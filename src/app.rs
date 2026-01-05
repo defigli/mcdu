@@ -56,11 +56,16 @@ pub struct App {
     pub cleanup_candidates: Vec<crate::cleanup::rules::Candidate>,
     pub cleanup_selected: std::collections::HashSet<std::path::PathBuf>,
     pub cleanup_selected_index: usize,
+    pub cleanup_categories: Vec<crate::cleanup::scanner::CategoryGroup>,
+    pub cleanup_expanded: std::collections::HashSet<String>,
     pub cleanup_scan_thread: Option<std::thread::JoinHandle<Vec<crate::cleanup::rules::Candidate>>>,
     pub cleanup_scan_rx: Option<std::sync::mpsc::Receiver<crate::cleanup::scanner::ScanProgress>>,
     pub cleanup_scanning: bool,
     pub cleanup_scan_progress: Option<crate::cleanup::scanner::ScanProgress>,
     pub cleanup_delete_thread: Option<std::thread::JoinHandle<crate::cleanup::executor::CleanupResult>>,
+    pub cleanup_delete_rx: Option<mpsc::Receiver<crate::cleanup::executor::CleanupProgress>>,
+    pub cleanup_delete_progress: Option<crate::cleanup::executor::CleanupProgress>,
+    pub cleanup_pending: Option<(Vec<crate::cleanup::rules::Candidate>, bool)>,
 }
 
 pub enum DeleteProgressUpdate {
@@ -121,11 +126,16 @@ impl App {
             cleanup_candidates: Vec::new(),
             cleanup_selected: HashSet::new(),
             cleanup_selected_index: 0,
+            cleanup_categories: Vec::new(),
+            cleanup_expanded: HashSet::new(),
             cleanup_scan_thread: None,
             cleanup_scan_rx: None,
             cleanup_scanning: false,
             cleanup_scan_progress: None,
             cleanup_delete_thread: None,
+            cleanup_delete_rx: None,
+            cleanup_delete_progress: None,
+            cleanup_pending: None,
         };
         app.start_scan();
         app
@@ -509,6 +519,13 @@ impl App {
                 let handle = self.cleanup_scan_thread.take().unwrap();
                 if let Ok(results) = handle.join() {
                     self.cleanup_candidates = results;
+                    self.cleanup_categories =
+                        cleanup::scanner::group_by_category(self.cleanup_candidates.clone());
+                    self.cleanup_expanded = self
+                        .cleanup_categories
+                        .iter()
+                        .map(|c| c.name.clone())
+                        .collect();
                     self.cleanup_scanning = false;
                     self.cleanup_scan_progress = None;
                     self.apply_selection_and_save();
@@ -561,12 +578,29 @@ impl App {
         let _ = cleanup::config::save_state(&config_paths, &state);
     }
 
-    pub fn cleanup_entries(&self) -> &[cleanup::rules::Candidate] {
-        &self.cleanup_candidates
+    pub fn cleanup_rows(&self) -> Vec<CleanupRow> {
+        let mut rows = Vec::new();
+        for cat in &self.cleanup_categories {
+            rows.push(CleanupRow::Category {
+                name: cat.name.clone(),
+            });
+            if self.cleanup_expanded.contains(&cat.name) {
+                for cand in &cat.candidates {
+                    rows.push(CleanupRow::Candidate {
+                        path: cand.path.clone(),
+                        rule: cand.rule_name.clone(),
+                        pattern: cand.rule_pattern.clone(),
+                        size: cand.size_bytes,
+                    });
+                }
+            }
+        }
+        rows
     }
 
     pub fn select_next_cleanup(&mut self) {
-        if self.cleanup_selected_index + 1 < self.cleanup_candidates.len() {
+        let rows = self.cleanup_rows();
+        if self.cleanup_selected_index + 1 < rows.len() {
             self.cleanup_selected_index += 1;
         }
     }
@@ -578,13 +612,45 @@ impl App {
     }
 
     pub fn toggle_cleanup_selection(&mut self) {
-        if let Some(item) = self.cleanup_candidates.get(self.cleanup_selected_index) {
-            if self.cleanup_selected.contains(&item.path) {
-                self.cleanup_selected.remove(&item.path);
-            } else {
-                self.cleanup_selected.insert(item.path.clone());
+        match self.cleanup_rows().get(self.cleanup_selected_index) {
+            Some(CleanupRow::Category { name }) => {
+                let paths: Vec<_> = self
+                    .cleanup_categories
+                    .iter()
+                    .find(|c| &c.name == name)
+                    .map(|c| c.candidates.iter().map(|cand| cand.path.clone()).collect())
+                    .unwrap_or_else(Vec::new);
+                let all_selected = paths.iter().all(|p| self.cleanup_selected.contains(p));
+                if all_selected {
+                    for p in paths {
+                        self.cleanup_selected.remove(&p);
+                    }
+                } else {
+                    for p in paths {
+                        self.cleanup_selected.insert(p);
+                    }
+                }
+                self.apply_selection_and_save();
             }
-            self.apply_selection_and_save();
+            Some(CleanupRow::Candidate { path, .. }) => {
+                if self.cleanup_selected.contains(path) {
+                    self.cleanup_selected.remove(path);
+                } else {
+                    self.cleanup_selected.insert(path.clone());
+                }
+                self.apply_selection_and_save();
+            }
+            None => {}
+        }
+    }
+
+    pub fn toggle_cleanup_expand(&mut self) {
+        if let Some(CleanupRow::Category { name }) = self.cleanup_rows().get(self.cleanup_selected_index) {
+            if self.cleanup_expanded.contains(name) {
+                self.cleanup_expanded.remove(name);
+            } else {
+                self.cleanup_expanded.insert(name.clone());
+            }
         }
     }
 
@@ -603,27 +669,34 @@ impl App {
     }
 
     pub fn start_cleanup_delete(&mut self) {
-        let selected = if self.cleanup_selected.is_empty() {
-            self.cleanup_candidates.clone()
-        } else {
-            self.cleanup_candidates
-                .iter()
-                .cloned()
-                .filter(|c| self.cleanup_selected.contains(&c.path))
-                .collect()
-        };
-
-        let handle = cleanup::executor::execute_async(selected, None);
-        self.cleanup_delete_thread = Some(handle);
-        self.notification = Some("Starting cleanup delete...".to_string());
-        self.notification_time = Some(Instant::now());
+        let selection = self.cleanup_selection();
+        if selection.is_empty() {
+            self.notification = Some("No cleanup items selected".to_string());
+            self.notification_time = Some(Instant::now());
+            return;
+        }
+        let total_size: u64 = selection.iter().map(|c| c.size_bytes).sum();
+        self.cleanup_pending = Some((selection, false));
+        self.modal = Some(Modal::cleanup_confirm(
+            self.cleanup_pending.as_ref().unwrap().0.len(),
+            total_size,
+            false,
+        ));
     }
 
     pub fn update_cleanup_delete(&mut self) {
+        if let Some(rx) = self.cleanup_delete_rx.as_mut() {
+            while let Ok(progress) = rx.try_recv() {
+                self.cleanup_delete_progress = Some(progress);
+            }
+        }
+
         if let Some(handle) = self.cleanup_delete_thread.as_ref() {
             if handle.is_finished() {
                 let handle = self.cleanup_delete_thread.take().unwrap();
                 if let Ok(result) = handle.join() {
+                    self.cleanup_delete_progress = None;
+                    self.cleanup_delete_rx = None;
                     if result.errors.is_empty() {
                         self.notification = Some(format!(
                             "Cleanup deleted files, freed {} bytes",
@@ -649,6 +722,94 @@ impl App {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    pub fn handle_cleanup_modal_confirm(&mut self, action: bool) {
+        if !action {
+            self.cleanup_pending = None;
+            return;
+        }
+        if let Some((pending, dry_run)) = self.cleanup_pending.take() {
+            if dry_run {
+                let result = cleanup::executor::dry_run(pending.clone());
+                self.cleanup_delete_progress = Some(cleanup::executor::CleanupProgress {
+                    path: PathBuf::new(),
+                    current: pending.len() as u64,
+                    total: pending.len() as u64,
+                    freed_bytes: result.freed_bytes,
+                    stage: cleanup::executor::CleanupStage::Files,
+                });
+                self.notification = Some(format!(
+                    "Dry-run: {} bytes would be freed",
+                    result.freed_bytes
+                ));
+                self.notification_time = Some(Instant::now());
+                self.mode = AppMode::Cleanup;
+            } else {
+                let total_size: u64 = pending.iter().map(|c| c.size_bytes).sum();
+                self.cleanup_pending = Some((pending, false));
+                self.modal = Some(Modal::cleanup_final(
+                    self.cleanup_pending.as_ref().unwrap().0.len(),
+                    total_size,
+                ));
+            }
+        }
+    }
+
+    pub fn handle_cleanup_final_confirm(&mut self, action: bool) {
+        if !action {
+            self.cleanup_pending = None;
+            return;
+        }
+        if let Some((pending, _)) = self.cleanup_pending.take() {
+            let git_roots = self.cleanup_git_roots(&pending);
+            let (tx, rx) = mpsc::channel();
+            let handle = cleanup::executor::execute_async(pending, true, git_roots, Some(tx));
+            self.cleanup_delete_thread = Some(handle);
+            self.cleanup_delete_rx = Some(rx);
+            self.notification = Some("Starting cleanup delete...".to_string());
+            self.notification_time = Some(Instant::now());
+        }
+    }
+
+    fn cleanup_git_roots(&self, candidates: &[cleanup::rules::Candidate]) -> Vec<PathBuf> {
+        let mut roots = Vec::new();
+        for cand in candidates {
+            if let Some(parent) = cand.path.parent() {
+                roots.push(parent.to_path_buf());
+            }
+        }
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
+    pub fn start_cleanup_dry_run(&mut self) {
+        let selection = self.cleanup_selection();
+        if selection.is_empty() {
+            self.notification = Some("No cleanup items selected".to_string());
+            self.notification_time = Some(Instant::now());
+            return;
+        }
+        let total_size: u64 = selection.iter().map(|c| c.size_bytes).sum();
+        self.cleanup_pending = Some((selection, true));
+        self.modal = Some(Modal::cleanup_confirm(
+            self.cleanup_pending.as_ref().unwrap().0.len(),
+            total_size,
+            true,
+        ));
+    }
+
+    fn cleanup_selection(&self) -> Vec<cleanup::rules::Candidate> {
+        if self.cleanup_selected.is_empty() {
+            self.cleanup_candidates.clone()
+        } else {
+            self.cleanup_candidates
+                .iter()
+                .cloned()
+                .filter(|c| self.cleanup_selected.contains(&c.path))
+                .collect()
         }
     }
 
@@ -819,6 +980,17 @@ impl App {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum CleanupRow {
+    Category { name: String },
+    Candidate {
+        path: PathBuf,
+        rule: String,
+        pattern: String,
+        size: u64,
+    },
+}
+
 #[cfg(test)]
 mod cleanup_tests {
     use super::*;
@@ -871,7 +1043,6 @@ risky = false
         let mut app = App::new();
         app.start_cleanup_scan().unwrap();
         app.block_on_cleanup_scan();
-
         assert_eq!(app.cleanup_candidates.len(), 1);
         assert_eq!(app.cleanup_candidates[0].path, cache_file);
 
@@ -898,6 +1069,8 @@ risky = false
         app.cleanup_selected.insert(cache_file.clone());
 
         app.start_cleanup_delete();
+        app.handle_cleanup_modal_confirm(true);
+        app.handle_cleanup_final_confirm(true);
         app.block_on_cleanup_delete();
 
         assert!(!cache_file.exists());

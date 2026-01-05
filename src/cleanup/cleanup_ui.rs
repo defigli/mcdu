@@ -39,7 +39,15 @@ mod tests {
     use super::*;
 
     fn candidate(path: &str) -> Candidate {
-        Candidate::new(PathBuf::from(path), "rule".into(), "**/*".into(), 1, None, false)
+        Candidate::new(
+            PathBuf::from(path),
+            "rule".into(),
+            "category".into(),
+            "**/*".into(),
+            1,
+            None,
+            false,
+        )
     }
 
     #[test]

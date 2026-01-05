@@ -14,6 +14,12 @@ pub struct ScanProgress {
     pub total_size: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct CategoryGroup {
+    pub name: String,
+    pub candidates: Vec<Candidate>,
+}
+
 pub fn scan(
     config: &CleanupConfig,
     platform_paths: &PlatformPaths,
@@ -97,6 +103,7 @@ fn scan_rule(
         results.push(Candidate::new(
             path.to_path_buf(),
             rule.name.clone(),
+            rule.category.clone(),
             rule.pattern.clone(),
             size,
             last_accessed,
@@ -114,6 +121,21 @@ fn scan_rule(
             });
         }
     }
+}
+
+pub fn group_by_category(candidates: Vec<Candidate>) -> Vec<CategoryGroup> {
+    let mut grouped: std::collections::BTreeMap<String, Vec<Candidate>> = std::collections::BTreeMap::new();
+    for cand in candidates {
+        grouped
+            .entry(cand.rule_category.clone())
+            .or_default()
+            .push(cand);
+    }
+
+    grouped
+        .into_iter()
+        .map(|(name, candidates)| CategoryGroup { name, candidates })
+        .collect()
 }
 
 fn file_size(metadata: &std::fs::Metadata) -> u64 {
@@ -184,6 +206,8 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, file_path);
         assert_eq!(results[0].rule_name, rule.name);
+        assert_eq!(results[0].rule_category, rule.category);
+        assert_eq!(results[0].rule_pattern, rule.pattern);
         assert_eq!(results[0].rule_pattern, rule.pattern);
     }
 
@@ -212,5 +236,37 @@ mod tests {
         assert!(!results.is_empty());
         let progress: Vec<_> = rx.try_iter().collect();
         assert!(!progress.is_empty());
+    }
+
+    #[test]
+    fn groups_candidates_by_category() {
+        let tmp = tempdir().unwrap();
+        let paths = platform_paths(&tmp);
+        let mut rule_a = rule_for_cache();
+        rule_a.category = "cat-a".into();
+        rule_a.min_age_hours = None;
+        rule_a.min_size_bytes = None;
+        let mut rule_b = rule_for_cache();
+        rule_b.category = "cat-b".into();
+        rule_b.pattern = "**/*.txt".into();
+        rule_b.min_age_hours = None;
+        rule_b.min_size_bytes = None;
+
+        let config = CleanupConfig {
+            scan_paths: vec!["${CACHE_DIR}".into()],
+            rules: vec![rule_a.clone(), rule_b.clone()],
+        };
+
+        let file_a = paths.cache_dir.join("one.log");
+        let file_b = paths.cache_dir.join("two.txt");
+        fs::create_dir_all(paths.cache_dir.clone()).unwrap();
+        fs::write(&file_a, "a").unwrap();
+        fs::write(&file_b, "b").unwrap();
+        let now = std::time::SystemTime::now();
+
+        let grouped = group_by_category(scan(&config, &paths, None, now));
+        let mut cats: Vec<_> = grouped.iter().map(|g| g.name.as_str()).collect();
+        cats.sort();
+        assert_eq!(cats, vec!["cat-a", "cat-b"]);
     }
 }

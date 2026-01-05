@@ -1,4 +1,4 @@
-use crate::app::{App, AppMode};
+use crate::app::{App, AppMode, CleanupRow};
 use crate::modal::Modal;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -44,6 +44,11 @@ pub fn draw(f: &mut Frame, app: &App) {
     // Progress bar if deleting
     if let Some(progress) = &app.delete_progress {
         draw_progress(f, progress);
+    }
+
+    // Cleanup delete progress
+    if let Some(progress) = &app.cleanup_delete_progress {
+        draw_cleanup_progress(f, progress);
     }
 
     // Loading overlay if scanning
@@ -302,52 +307,97 @@ fn draw_cleanup_loading(f: &mut Frame, count: Option<usize>) {
 }
 
 fn draw_cleanup(f: &mut Frame, app: &App, area: Rect) {
+    let rows = app.cleanup_rows();
     let mut lines = Vec::new();
-    lines.push(Line::from("Cleanup candidates"));
-    lines.push(Line::from("".to_string()));
+    lines.push(Line::from("Cleanup"));
+    lines.push(Line::from(""));
 
-    let entries = app.cleanup_entries();
     let viewport_height = area.height.saturating_sub(4) as usize;
     let start_idx = app.cleanup_selected_index.saturating_sub(viewport_height / 2);
-    let end_idx = (start_idx + viewport_height).min(entries.len());
+    let end_idx = (start_idx + viewport_height).min(rows.len());
 
-    for (idx, entry) in entries.iter().enumerate().skip(start_idx).take(end_idx - start_idx) {
-        let selected = app.cleanup_selected.contains(&entry.path);
+    for (idx, row) in rows.iter().enumerate().skip(start_idx).take(end_idx - start_idx) {
         let cursor = idx == app.cleanup_selected_index;
-        let mark = if selected { "[x]" } else { "[ ]" };
-        let name = entry
-            .path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("(unknown)");
-        let size = format_size(entry.size_bytes);
-        let rule = &entry.rule_name;
-        let mut spans = vec![Span::raw(format!("{} {}", mark, name))];
-        spans.push(Span::styled(
-            format!(" {:>8}", size),
-            Style::default().fg(Color::Green),
-        ));
-        spans.push(Span::styled(
-            format!("  ({})", rule),
-            Style::default().fg(Color::Gray),
-        ));
-        let line = Line::from(spans).style(if cursor {
-            Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        });
-        lines.push(line);
-
-        let reason = format!("    matched pattern {}", entry.rule_pattern);
-        lines.push(Line::from(Span::styled(
-            reason,
-            Style::default().fg(Color::DarkGray),
-        )));
+        match row {
+            CleanupRow::Category { name } => {
+                let cat = app
+                    .cleanup_categories
+                    .iter()
+                    .find(|c| &c.name == name);
+                let (selected_count, total_count, total_size) = match cat {
+                    Some(c) => (
+                        c.candidates
+                            .iter()
+                            .filter(|cand| app.cleanup_selected.contains(&cand.path))
+                            .count(),
+                        c.candidates.len(),
+                        c.candidates.iter().map(|c| c.size_bytes).sum::<u64>(),
+                    ),
+                    None => (0, 0, 0),
+                };
+                let checkbox = if total_count == 0 {
+                    "[ ]"
+                } else if selected_count == total_count {
+                    "[x]"
+                } else if selected_count > 0 {
+                    "[-]"
+                } else {
+                    "[ ]"
+                };
+                let expanded = app.cleanup_expanded.contains(name);
+                let arrow = if expanded { "▾" } else { "▸" };
+                let size_str = format_size(total_size);
+                let mut spans = vec![Span::raw(format!("{} {} {}", arrow, checkbox, name))];
+                spans.push(Span::styled(
+                    format!(" {:>8}", size_str),
+                    Style::default().fg(Color::Green),
+                ));
+                let line = Line::from(spans).style(if cursor {
+                    Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                });
+                lines.push(line);
+            }
+            CleanupRow::Candidate {
+                path,
+                rule,
+                pattern,
+                size,
+            } => {
+                let selected = app.cleanup_selected.contains(path);
+                let mark = if selected { "[x]" } else { "[ ]" };
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("(unknown)");
+                let size_str = format_size(*size);
+                let mut spans = vec![Span::raw(format!("  {} {}", mark, name))];
+                spans.push(Span::styled(
+                    format!(" {:>8}", size_str),
+                    Style::default().fg(Color::Green),
+                ));
+                spans.push(Span::styled(
+                    format!("  ({})", rule),
+                    Style::default().fg(Color::Gray),
+                ));
+                let line = Line::from(spans).style(if cursor {
+                    Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                });
+                lines.push(line);
+                lines.push(Line::from(Span::styled(
+                    format!("      matched pattern {}", pattern),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
     }
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Cleanup (Space toggle, a all, n none, d delete, q back)");
+        .title("Cleanup (Space toggle, Enter expand, a all, n none, d delete, D dry-run, q back)");
 
     f.render_widget(Paragraph::new(lines).block(block), area);
 }
@@ -398,6 +448,55 @@ fn draw_progress(f: &mut Frame, progress: &crate::app::DeleteProgress) {
     );
     f.render_widget(
         Paragraph::new(stats).style(Style::default().bg(Color::Black)),
+        inner_layout[2],
+    );
+}
+
+fn draw_cleanup_progress(f: &mut Frame, progress: &crate::cleanup::executor::CleanupProgress) {
+    let centered = centered_rect(70, 40, f.area());
+
+    f.render_widget(Clear, centered);
+
+    let inner_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(3),
+            Constraint::Length(2),
+        ])
+        .split(centered);
+
+    let stage_label = match progress.stage {
+        crate::cleanup::executor::CleanupStage::Files => "Files",
+        crate::cleanup::executor::CleanupStage::Git => "Git",
+    };
+    f.render_widget(
+        Paragraph::new(format!("Cleanup [{}]: {}", stage_label, progress.path.display())).style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+                .bg(Color::Black),
+        ),
+        inner_layout[0],
+    );
+
+    let ratio = if progress.total > 0 {
+        progress.current as f64 / progress.total as f64
+    } else {
+        0.0
+    };
+    f.render_widget(
+        Gauge::default()
+            .block(Block::default().borders(Borders::ALL).title("Cleanup Progress"))
+            .gauge_style(Style::default().fg(Color::Green))
+            .ratio(ratio),
+        inner_layout[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("Freed {} bytes", progress.freed_bytes))
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center),
         inner_layout[2],
     );
 }

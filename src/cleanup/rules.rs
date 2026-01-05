@@ -23,6 +23,7 @@ pub struct Rule {
 pub struct Candidate {
     pub path: PathBuf,
     pub rule_name: String,
+    pub rule_category: String,
     pub rule_pattern: String,
     pub size_bytes: u64,
     pub last_accessed: Option<SystemTime>,
@@ -99,6 +100,7 @@ impl Candidate {
     pub fn new(
         path: PathBuf,
         rule_name: String,
+        rule_category: String,
         rule_pattern: String,
         size_bytes: u64,
         last_accessed: Option<SystemTime>,
@@ -107,6 +109,7 @@ impl Candidate {
         Candidate {
             path,
             rule_name,
+            rule_category,
             rule_pattern,
             size_bytes,
             last_accessed,
