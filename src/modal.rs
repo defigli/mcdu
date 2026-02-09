@@ -1,9 +1,11 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub enum ModalType {
     ConfirmDelete { path: PathBuf, size: u64 },
     FinalConfirm { path: PathBuf, size: u64 },
+    CleanupConfirm { items: usize, size: u64, dry_run: bool },
+    CleanupFinal { items: usize, size: u64 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -20,10 +22,10 @@ pub struct Modal {
 }
 
 impl Modal {
-    pub fn confirm_delete(path: &PathBuf, size: u64) -> Self {
+    pub fn confirm_delete(path: &Path, size: u64) -> Self {
         Modal {
             modal_type: ModalType::ConfirmDelete {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 size,
             },
             selected_button: 0,
@@ -35,15 +37,37 @@ impl Modal {
         }
     }
 
-    pub fn final_confirm(path: &PathBuf, size: u64) -> Self {
+    pub fn final_confirm(path: &Path, size: u64) -> Self {
         Modal {
             modal_type: ModalType::FinalConfirm {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 size,
             },
             selected_button: 1, // Default to Cancel for safety
             buttons: vec![
                 ("YES, DELETE".to_string(), ModalAction::Confirm),
+                ("Cancel".to_string(), ModalAction::Cancel),
+            ],
+        }
+    }
+
+    pub fn cleanup_confirm(items: usize, size: u64, dry_run: bool) -> Self {
+        Modal {
+            modal_type: ModalType::CleanupConfirm { items, size, dry_run },
+            selected_button: 1,
+            buttons: vec![
+                ("Yes".to_string(), ModalAction::Confirm),
+                ("No".to_string(), ModalAction::Cancel),
+            ],
+        }
+    }
+
+    pub fn cleanup_final(items: usize, size: u64) -> Self {
+        Modal {
+            modal_type: ModalType::CleanupFinal { items, size },
+            selected_button: 1,
+            buttons: vec![
+                ("YES, CLEANUP".to_string(), ModalAction::Confirm),
                 ("Cancel".to_string(), ModalAction::Cancel),
             ],
         }
@@ -58,18 +82,29 @@ impl Modal {
             ModalType::ConfirmDelete { path, size } => {
                 format!(
                     "Delete {} ({})? ",
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("?"),
+                    path.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
                     format_size(*size)
                 )
             }
             ModalType::FinalConfirm { path, size } => {
                 format!(
                     "FINAL CONFIRMATION - Delete {} ({})? ",
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("?"),
+                    path.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
+                    format_size(*size)
+                )
+            }
+            ModalType::CleanupConfirm { items, size, dry_run } => {
+                format!(
+                    "{} {} items ({})? ",
+                    if *dry_run { "Dry-run" } else { "Cleanup delete" },
+                    items,
+                    format_size(*size)
+                )
+            }
+            ModalType::CleanupFinal { items, size } => {
+                format!(
+                    "FINAL CONFIRMATION - Cleanup {} items ({})? ",
+                    items,
                     format_size(*size)
                 )
             }
@@ -82,6 +117,14 @@ impl Modal {
             ModalType::FinalConfirm { .. } => {
                 "Really confirm? This is your last chance!".to_string()
             }
+            ModalType::CleanupConfirm { dry_run, .. } => {
+                if *dry_run {
+                    "Show what would be cleaned without deleting.".to_string()
+                } else {
+                    "Proceed to final confirmation.".to_string()
+                }
+            }
+            ModalType::CleanupFinal { .. } => "Really delete selected cleanup items?".to_string(),
         }
     }
 }

@@ -1,6 +1,23 @@
-use std::path::PathBuf;
+use crate::cache::SizeCache;
 use std::fs;
+use std::path::PathBuf;
+use std::sync::mpsc;
 use walkdir::WalkDir;
+
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
+/// Get actual disk usage for a file (handles sparse files correctly)
+/// Returns blocks * 512 instead of apparent size
+#[cfg(unix)]
+fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    metadata.blocks() * 512
+}
+
+#[cfg(not(unix))]
+fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
+    metadata.len()
+}
 
 #[derive(Clone, Debug)]
 pub struct DirEntry {
@@ -10,16 +27,21 @@ pub struct DirEntry {
     pub is_dir: bool,
     #[allow(dead_code)]
     pub file_count: u64,
-    pub size_change: Option<(i64, f32)>, // (delta_bytes, delta_percent)
+    pub size_change: Option<(i64, f32)>, // (delta_bytes, percent_of_directory)
     #[allow(dead_code)]
     pub is_new: bool, // True if this didn't exist before
 }
 
-pub fn scan_directory(path: &PathBuf) -> Result<Vec<DirEntry>, Box<dyn std::error::Error>> {
+pub fn scan_directory(
+    path: &PathBuf,
+    cache: &SizeCache,
+    progress_tx: Option<&mpsc::Sender<crate::app::ScanResult>>,
+) -> Result<Vec<DirEntry>, Box<dyn std::error::Error>> {
     // Scan immediate children (non-recursive)
-    let children: Vec<_> = fs::read_dir(path)?
-        .filter_map(|e| e.ok())
-        .collect();
+    let children: Vec<_> = fs::read_dir(path)?.filter_map(|e| e.ok()).collect();
+
+    let total_count = children.len();
+    let mut scanned_count = 0;
 
     // Process sequentially - directory size calculation is I/O bound and parallel doesn't help much
     // Plus we need to keep responsiveness
@@ -30,16 +52,29 @@ pub fn scan_directory(path: &PathBuf) -> Result<Vec<DirEntry>, Box<dyn std::erro
             let metadata = entry.metadata().ok()?;
             let is_dir = metadata.is_dir();
 
-            let name = path
-                .file_name()?
-                .to_str()?
-                .to_string();
+            let name = path.file_name()?.to_str()?.to_string();
 
-            // Fast size calculation
+            // Fast size calculation - reuse metadata for files, use cache for dirs
             let size = if is_dir {
-                quick_dir_size(&path)
+                // Send progress update for directories (skip files since they're fast)
+                if let Some(tx) = progress_tx {
+                    scanned_count += 1;
+                    let _ = tx.send(crate::app::ScanResult::Progress {
+                        current_name: name.clone(),
+                        scanned_count,
+                        total_count,
+                    });
+                }
+                // Try cache first, fall back to scanning
+                if let Some(cached_size) = cache.get(&path) {
+                    cached_size
+                } else {
+                    let size = quick_dir_size(&path);
+                    cache.set(path.clone(), size);
+                    size
+                }
             } else {
-                metadata.len()
+                disk_usage(&metadata)
             };
 
             Some(DirEntry {
@@ -62,13 +97,21 @@ pub fn scan_directory(path: &PathBuf) -> Result<Vec<DirEntry>, Box<dyn std::erro
 }
 
 fn quick_dir_size(path: &std::path::Path) -> u64 {
-    // Ultra-fast size calculation for UI responsiveness
-    // Only counts first 50000 files to keep latency low
-    WalkDir::new(path)
+    // Calculate total size of all files in directory
+    // Stay on same filesystem to avoid counting mounted volumes (like ncdu does)
+    let mut total = 0u64;
+
+    for entry in WalkDir::new(path)
+        .same_file_system(true)
         .into_iter()
-        .take(50000) // Hard limit - prevents huge traversals from blocking UI
         .filter_map(|e| e.ok())
-        .filter_map(|e| e.metadata().ok())
-        .map(|m| m.len())
-        .sum()
+    {
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.is_file() {
+                total += disk_usage(&metadata);
+            }
+        }
+    }
+
+    total
 }

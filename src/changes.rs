@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 /// Represents a snapshot of directory state using hashes instead of paths
 #[derive(Debug, Clone)]
@@ -19,6 +19,7 @@ pub struct SizeChange {
     #[allow(dead_code)]
     pub new_size: u64,
     pub delta_bytes: i64,
+    #[allow(dead_code)]
     pub delta_percent: f32,
 }
 
@@ -143,6 +144,7 @@ fn calculate_dir_size(path: PathBuf) -> u64 {
     use walkdir::WalkDir;
 
     WalkDir::new(path)
+        .same_file_system(true)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter_map(|e| e.metadata().ok())
