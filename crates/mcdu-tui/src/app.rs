@@ -528,8 +528,6 @@ impl App {
         self.cleanup_scan_thread = Some(handle);
         self.cleanup_scan_rx = Some(rx);
         self.cleanup_scanning = true;
-        self.notification = Some("Starting cleanup scan...".to_string());
-        self.notification_time = Some(Instant::now());
         self.mode = AppMode::Cleanup;
         Ok(())
     }
