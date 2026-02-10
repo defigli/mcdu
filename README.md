@@ -1,78 +1,24 @@
-# mcdu - Modern Disk Usage Analyzer
+# mcdu - Modern Disk Usage Analyzer & Developer Cleanup Tool
 
-A fast, modern, and safe disk usage analyzer with integrated file deletion capabilities, written in Rust. Spiritual fork of ncdu with enhanced performance and features.
+A fast, modern disk usage analyzer with an integrated developer cleanup tool, written in Rust. Think **ncdu** meets **CCleaner for developers**.
 
-## ✨ Features
+![Main View](docs/screens/mainview.png)
 
-### 🚀 Performance
-- **Async scanning** - Non-blocking directory scanning in background thread
-- **Smart caching** - Intelligent size caching with mtime validation
-- **Instant navigation** - Cached directories load instantly when revisiting
-- **Optimized I/O** - Single-pass operations, no redundant metadata calls
-- **Memory efficient** - Streaming with walkdir, minimal memory footprint
+## Features
 
-### 📊 Core Functionality
-- **Recursive directory scanning** - Quickly analyze disk usage across nested directories
-- **Colorful TUI** - Color-coded display by file size (red for large, green for small)
-- **Live scanning progress** - Real-time progress with current file and percentage
-- **Disk space monitoring** - Shows available/total disk space in title bar
-- **Viewport scrolling** - Automatic scrolling keeps selection visible
-- **Change tracking** - Highlights size changes between scans
-- **Safe deletion** - Double-confirmation dialogs before destructive operations
-- **Non-blocking delete** - Continue browsing while files are deleted in background
-- **Dry-run mode** - Preview what would be deleted without actually deleting
-- **Audit logging** - JSON logs of all deletions saved to `~/.mcdu/logs/`
+- **Disk usage browser** - Navigate your filesystem with vim-style keybindings, color-coded by size
+- **Developer cleanup** - Scan for build artifacts, caches, and reclaimable space across 18+ ecosystems
+- **Safe deletion** - Double-confirmation dialogs, dry-run mode, and JSON audit logging
+- **Fast scanning** - Background async scanning with live progress, jwalk parallelism for cleanup
+- **Cross-platform** - macOS (APFS) and Linux (ext4, btrfs, xfs)
 
-### 🎨 User Experience
-- **Vim keybindings** - j/k for up/down, h/l for parent/enter
-- **Arrow keys** - Full arrow key support for navigation
-- **Modal navigation** - Use arrow keys to select buttons in confirmation dialogs
-- **Loading overlays** - Clear progress indication during scanning
-- **Auto-dismiss notifications** - Notifications disappear after 3 seconds
-- **Cross-platform** - Works on macOS (APFS) and Linux (ext4, btrfs, xfs, etc.)
-
-## 📥 Installation
-
-### Cargo (crates.io)
+## Installation
 
 ```bash
 cargo install mcdu
 ```
 
-### Homebrew (macOS)
-
-```bash
-brew tap mikalv/mcdu
-brew install mcdu
-```
-
-### Arch Linux (AUR)
-
-```bash
-# Using yay
-yay -S mcdu
-
-# Or using paru
-paru -S mcdu
-```
-
-### Debian/Ubuntu
-
-Download the latest `.deb` package from [GitHub Releases](https://github.com/mikalv/mcdu/releases) and install:
-
-```bash
-sudo dpkg -i mcdu_*.deb
-```
-
-### Fedora/RHEL
-
-Download the latest `.rpm` package from [GitHub Releases](https://github.com/mikalv/mcdu/releases) and install:
-
-```bash
-sudo rpm -i mcdu-*.rpm
-```
-
-### Building from Source
+### From source
 
 ```bash
 git clone https://github.com/mikalv/mcdu.git
@@ -81,231 +27,117 @@ cargo build --release
 ./target/release/mcdu
 ```
 
-## 🎮 Usage
+## Usage
 
-### Navigation
-- `↑/k` - Move cursor up
-- `↓/j` - Move cursor down
-- `Enter/→/l` - Enter directory
-- `Backspace/←/h` - Go to parent directory
-- `d` - Delete selected file/directory
-- `r` - Rescan selected directory and subdirectories
-- `R/c` - Rescan entire tree from root
-- `?` - Show help screen
-- `q/Esc` - Quit application
-
-### Deletion Workflow
-
-1. **Select file/directory** - Navigate with arrow keys
-2. **Press 'd'** - Opens confirmation dialog
-3. **Confirm** - First dialog: `[Yes] [No] [Dry-run]`
-4. **Final confirm** - Second dialog: `[YES, DELETE] [Cancel]`
-5. **Watch progress** - Real-time progress bar shows deletion status
-6. **Get notified** - Green success message with stats
-
-### Dry-run Mode
-Press `d` on target, then select `[d] Dry-run` to see what would be deleted without actually deleting anything.
-
-### Rescanning
-- **`r`** - Rescan selected directory and all subdirectories
-- **`R/c`** - Rescan entire tree from root
-
-The tree is kept in memory for instant navigation. Use `r` for quick partial updates after changes, or `R` for a full rescan.
-
-## 🖥️ UI Design
-
-### Title Bar
-```
-📊 mcdu v0.2.0 | /Users/username/Repos       42 items | 15 cached | 💾 42GB/460GB (91%)
-```
-Shows: current path, item count, cached entries, and disk space (available/total/percent used)
-
-### Color Coding
-- 🔴 **Red** - Files >100 GB
-- 🟡 **Yellow** - Files >10 GB
-- 🔵 **Cyan** - Files >1 GB
-- 🟢 **Green** - Files <1 GB
-
-### Loading Progress
-```
-┌────────────────────────────────────────┐
-│  ⟳ Scanning directory...               │
-│                                         │
-│  22 / 135 items (16%)                  │
-│                                         │
-│  evesrc                                 │
-│                                         │
-│  Please wait                            │
-└────────────────────────────────────────┘
-```
-Shows: progress counter, current directory being scanned, and percentage complete.
-
-### Main View
-```
-┌─────────────────────────────────────────────────────────┐
-│ 📊 mcdu v0.2.0 | /Users/username/Projects               │
-├─────────────────────────────────────────────────────────┤
-│ Path: /Users/username/Projects                         │
-│                                                         │
-│ 📁 node_modules           123.4 GB  ▓▓▓▓▓░░░░░░  ⬆ 5% │
-│ 📁 .git                    45.2 GB  ▓▓▓░░░░░░░░       │
-│ 📁 target                  12.1 GB  ▓░░░░░░░░░░       │
-│ 📄 large-file.iso           2.3 GB  ░░░░░░░░░░░       │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│ [↑↓jk] Navigate [Enter] Open [h] Parent                │
-│ [d] Delete [r] Refresh [c] Clear cache [?] Help        │
-│                                      [q/Esc] Quit       │
-└─────────────────────────────────────────────────────────┘
-```
-⬆/⬇ arrows show size changes since last scan.
-
-## 📝 Logging
-
-All deletions and dry-runs are logged to `~/.mcdu/logs/delete-YYYY-MM-DD.log`
-
-### Log Format (JSON Lines)
-```json
-{
-  "timestamp": "2025-01-10T14:23:45Z",
-  "action": "delete",
-  "path": "/Users/username/Projects/node_modules",
-  "size_bytes": 132548901234,
-  "dry_run": false,
-  "status": "success",
-  "files_deleted": 45821,
-  "duration_ms": 3421,
-  "errors": null
-}
-```
-
-## 🏗️ Architecture
-
-### Module Structure
-```
-src/
-├── main.rs          # Event loop and input handling
-├── app.rs           # Application state and logic
-├── ui.rs            # TUI rendering with ratatui
-├── scan.rs          # Async directory scanning
-├── delete.rs        # Optimized file deletion
-├── modal.rs         # Modal dialog system
-├── platform.rs      # Platform-specific (statvfs, disk space)
-├── cache.rs         # Size caching with mtime validation
-├── changes.rs       # Directory fingerprinting & change detection
-└── logger.rs        # JSON structured logging
-```
-
-### Key Design Decisions
-
-1. **Async Scanning** - Directory scanning runs in background thread via mpsc channels
-2. **Size Caching** - Thread-safe HashMap with automatic mtime-based invalidation
-3. **Non-blocking UI** - Ratatui event loop continues during all operations
-4. **Safe Defaults** - Final confirm defaults to "Cancel" to prevent accidents
-5. **Optimized I/O** - Single-pass deletion, reused metadata, fragment_size for disk space
-
-## 🔧 Performance Optimizations
-
-### Scanning
-- **Async background scanning** - UI never freezes
-- **Live progress updates** - See what's being scanned in real-time
-- **Smart caching** - Revisit directories instantly
-- **Fragment size detection** - Correct disk space on APFS (macOS)
-
-### Deletion
-- **Single-pass algorithm** - One directory walk instead of three
-- **Metadata reuse** - No redundant stat() calls
-- **Background threading** - Non-blocking operation
-
-### Memory
-- **Streaming iteration** - walkdir processes files as it goes
-- **Efficient caching** - Only caches directory sizes, not full trees
-- **Minimal allocations** - Reuses buffers where possible
-
-## 📦 Dependencies
-
-- **ratatui** - Terminal UI framework
-- **crossterm** - Terminal control
-- **walkdir** - Recursive directory traversal
-- **serde/serde_json** - JSON serialization
-- **chrono** - Timestamp handling
-- **nix** - Unix system calls (statvfs)
-
-## 🌍 Platform Support
-
-- ✅ **macOS** - Full support with APFS compatibility
-- ✅ **Linux** - Full support (ext4, btrfs, xfs, etc.)
-- ❌ **Windows** - Not currently supported
-
-### Platform-Specific Features
-- **macOS**: Correct APFS disk space using `f_frsize`
-- **Linux**: Standard ext4/btrfs/xfs support
-- **Both**: mtime-based cache validation
-
-## 🐛 Known Issues
-
-- Very large directories (>100k items) may show slow initial scan
-- Mouse input not supported (keyboard only)
-- Windows not yet supported
-
-## 🚀 Future Enhancements
-
-- [ ] Parallel scanning using rayon
-- [ ] APFS snapshot handling on macOS
-- [ ] SELinux attribute handling on Linux
-- [ ] Undo functionality with transaction log
-- [ ] Search/filter capabilities
-- [ ] Sorting options (by size, date, name)
-- [ ] Configuration file support
-- [ ] Windows support via GetDiskFreeSpaceEx
-- [ ] Progress estimation for large deletions
-
-## 🔨 Building from Source
+### Disk Usage Browser
 
 ```bash
-# Debug build
-cargo build
-
-# Release build (optimized)
-cargo build --release
-
-# Run tests
-cargo test
-
-# Run with debug logging
-RUST_LOG=debug cargo run
-
-# Check documentation
-cargo doc --open
+mcdu              # browse current directory
+mcdu /path/to     # browse specific directory
 ```
 
-## 📊 Performance Comparison
+![Main View](docs/screens/mainview.png)
 
-**Scanning 100k files:**
-- Initial scan: ~2-3 seconds
-- Cached revisit: **Instant** (<10ms)
-- Memory usage: ~50MB
+| Key | Action |
+|-----|--------|
+| `j/k` or arrows | Navigate |
+| `Enter/l` | Enter directory |
+| `Backspace/h` | Go up |
+| `d` | Delete selected |
+| `r` | Rescan selected |
+| `R` | Rescan all |
+| `C` | Switch to cleanup mode |
+| `?` | Help |
+| `q` | Quit |
 
-**Deletion:**
-- Old approach: 3 directory walks
-- New approach: **1 directory walk** (3x faster!)
+Color coding: red (>100 GB), yellow (>10 GB), cyan (>1 GB), green (<1 GB).
 
-## 📄 License
+### Developer Cleanup
+
+```bash
+mcdu cleanup            # scan default paths
+mcdu cleanup ~/repos    # scan specific path
+```
+
+Scans for build artifacts, caches, and other reclaimable disk space across your development tools.
+
+![Cleanup Overview](docs/screens/overview.png)
+
+![Cleanup Files](docs/screens/cleanup.png)
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `1-4` | Switch tabs (Overview, Categories, Files, Quarantine) |
+| `j/k` or arrows | Navigate |
+| `Space` | Toggle selection |
+| `a` / `n` | Select all / none |
+| `d` | Delete selected |
+| `D` | Dry run |
+| `C` | Rescan |
+| `q` | Back to disk browser |
+
+**Supported ecosystems:** Rust/Cargo, Node.js, Python, Go, Java/JVM, Elixir/Erlang, Ruby, PHP, .NET, Zig, Deno, Swift/iOS, Docker, Kubernetes, Terraform, IDE caches, browser caches, system caches (Homebrew, Xcode, Trash).
+
+**Default scan paths:** `~/Downloads`, `~/Projects`, `~/Code`, `~/Developer`, `~/repos`, `~/dev`, `~/src`, `~/workspace`
+
+### Custom Configuration
+
+Place a config file at `~/.config/mcdu/cleanup.toml`:
+
+```toml
+scan_paths = ["~/myprojects", "~/work"]
+
+[[rules]]
+name = "custom-cache"
+category = "Custom"
+pattern = "**/.cache"
+path = "${HOME}/myprojects"
+match_type = "directory"
+```
+
+Rules from the config are merged with built-in defaults.
+
+## Architecture
+
+```
+crates/
+  mcdu-core/     # Scanner, cleanup rules, config, platform detection
+  mcdu-tui/      # Ratatui app state, UI rendering, keybindings
+  mcdu/          # CLI binary (clap), entry point
+```
+
+### Key design decisions
+
+- **Async scanning** - Directory scanning in background thread via mpsc channels
+- **Subtree pruning** - `filter_entry` skips node_modules/target/etc. entirely during cleanup scan
+- **Safe defaults** - Final confirm defaults to Cancel, all deletions are audit-logged
+- **Workspace crates** - Core logic separated from TUI and CLI for testability
+
+## Dependencies
+
+- **ratatui** + **crossterm** - Terminal UI
+- **walkdir** / **jwalk** - Directory traversal (jwalk for parallel cleanup scanning)
+- **clap** - CLI argument parsing
+- **serde** / **toml** - Configuration
+- **rayon** - Parallel processing
+
+## Platform Support
+
+- macOS - Full support with APFS compatibility
+- Linux - Full support (ext4, btrfs, xfs, etc.)
+
+## Building & Testing
+
+```bash
+cargo build            # debug build
+cargo build --release  # optimized release build
+cargo test             # run all workspace tests
+```
+
+## License
 
 MIT
 
-## 🤝 Contributing
+## Acknowledgments
 
-Pull requests welcome! Please ensure:
-1. Code compiles without warnings (`cargo clippy`)
-2. Tests pass (`cargo test`)
-3. Changes are well-documented
-4. Performance improvements are benchmarked
-
-## 💬 Support
-
-For issues or feature requests, please open an issue on GitHub.
-
-## 🙏 Acknowledgments
-
-Inspired by [ncdu](https://dev.yorhel.nl/ncdu) - the original ncurses disk usage analyzer.
+Inspired by [ncdu](https://dev.yorhel.nl/ncdu) and the need to reclaim disk space eaten by `node_modules` and `target/` directories.
