@@ -1,0 +1,27 @@
+[package]
+name = "mcdu-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for mcdu - developer cleanup rules, scanning, and quarantine"
+keywords = ["cleanup", "developer", "disk", "cache"]
+categories = ["filesystem", "development-tools"]
+
+[dependencies]
+walkdir.workspace = true
+glob.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+num_cpus.workspace = true
+dirs.workspace = true
+nix = { version = "0.31.1", features = ["fs"] }
+jwalk = "0.8.1"
+
+[dev-dependencies]
+tempfile.workspace = true
