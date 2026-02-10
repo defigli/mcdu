@@ -590,19 +590,12 @@ fn draw_cleanup_categories(f: &mut Frame, app: &App, area: Rect) {
             } => {
                 let selected = app.cleanup_selected.contains(path);
                 let mark = if selected { "[x]" } else { "[ ]" };
-                let name = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("(unknown)");
                 let size_str = format_size(*size);
-                let mut spans = vec![Span::raw(format!("  {} {}", mark, name))];
+                let display_path = path.display().to_string();
+                let mut spans = vec![Span::raw(format!("  {} {}", mark, display_path))];
                 spans.push(Span::styled(
                     format!(" {:>8}", size_str),
                     Style::default().fg(Color::Green),
-                ));
-                spans.push(Span::styled(
-                    format!("  ({})", rule),
-                    Style::default().fg(Color::Gray),
                 ));
                 let line = Line::from(spans).style(if cursor {
                     Style::default()
@@ -613,7 +606,7 @@ fn draw_cleanup_categories(f: &mut Frame, app: &App, area: Rect) {
                 });
                 lines.push(line);
                 lines.push(Line::from(Span::styled(
-                    format!("      matched pattern {}", pattern),
+                    format!("      {} ({})", rule, pattern),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
@@ -678,23 +671,17 @@ fn draw_cleanup_files(f: &mut Frame, app: &App, area: Rect) {
         let selected = app.cleanup_selected.contains(&candidate.path);
         let mark = if selected { "[x]" } else { "[ ]" };
 
-        let path_str = candidate
-            .path
-            .to_str()
-            .unwrap_or("(invalid)")
-            .chars()
-            .take(40)
-            .collect::<String>();
+        let path_str = candidate.path.display().to_string();
 
         let line = Line::from(vec![
             Span::raw(format!("{} ", mark)),
-            Span::raw(format!("{:<40}", path_str)),
+            Span::raw(format!("{} ", path_str)),
             Span::styled(
                 format!("{:>8}", format_size(candidate.size_bytes)),
                 Style::default().fg(Color::Green),
             ),
             Span::raw("  "),
-            Span::styled(format!("{}", cat_name), Style::default().fg(Color::Yellow)),
+            Span::styled(cat_name.to_string(), Style::default().fg(Color::Yellow)),
         ])
         .style(if cursor {
             Style::default()
