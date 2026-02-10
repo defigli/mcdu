@@ -1,0 +1,25 @@
+[package]
+name = "mcdu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "mcdu"
+path = "src/main.rs"
+
+[dependencies]
+mcdu-core.workspace = true
+mcdu-tui.workspace = true
+clap.workspace = true
+crossterm.workspace = true
+dirs.workspace = true
+ratatui.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

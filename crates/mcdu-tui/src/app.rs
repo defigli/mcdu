@@ -1,4 +1,4 @@
-use crate::cleanup_ui::{CleanupTab, FilesSortColumn};
+use crate::cleanup_ui::CleanupTab;
 use crate::delete;
 use crate::logger;
 use crate::modal::Modal;

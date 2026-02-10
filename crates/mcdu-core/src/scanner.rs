@@ -219,7 +219,7 @@ fn scan_rule(
 fn scan_project_marker_rule(
     rule: &Rule,
     marker: &str,
-    platform_paths: &PlatformPaths,
+    _platform_paths: &PlatformPaths,
     progress_tx: Option<&mpsc::Sender<ScanProgress>>,
     now: SystemTime,
     found_count: &mut u64,

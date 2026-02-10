@@ -1,0 +1,1089 @@
+# mcdu Developer Cleanup - Default Rules
+# A comprehensive TUI CCleaner for developers
+#
+# Categories:
+#   - Rust/Cargo
+#   - Node.js
+#   - Python
+#   - Elixir/Erlang
+#   - Go
+#   - Java/JVM
+#   - Ruby
+#   - PHP/Composer
+#   - .NET/NuGet
+#   - Zig
+#   - Deno
+#   - Swift/iOS
+#   - Version Managers (asdf, mise, rustup, nvm)
+#   - IDE Caches (VS Code, JetBrains, Vim/Neovim)
+#   - Browser Caches (Chrome, Firefox, Safari, etc.)
+#   - DevOps (Docker, Kubernetes, Terraform)
+#   - System (Homebrew, Xcode, Trash)
+
+# Default scan paths - where to look for project artifacts
+scan_paths = [
+    "${HOME}/Downloads",
+    "${HOME}/Projects",
+    "${HOME}/Code",
+    "${HOME}/Developer",
+    "${HOME}/repos",
+    "${HOME}/dev",
+    "${HOME}/src",
+    "${HOME}/workspace",
+]
+
+# ============================================================================
+# RUST/CARGO
+# ============================================================================
+
+[[rules]]
+name = "cargo-registry-cache"
+category = "Rust/Cargo"
+description = "Downloaded crate archives"
+pattern = "**/*"
+path = "${HOME}/.cargo/registry/cache"
+match_type = "both"
+min_age_hours = 168  # 1 week
+
+[[rules]]
+name = "cargo-registry-src"
+category = "Rust/Cargo"
+description = "Extracted crate sources"
+pattern = "**/*"
+path = "${HOME}/.cargo/registry/src"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "cargo-git-checkouts"
+category = "Rust/Cargo"
+description = "Git dependency checkouts"
+pattern = "**/*"
+path = "${HOME}/.cargo/git/checkouts"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "cargo-git-db"
+category = "Rust/Cargo"
+description = "Git dependency bare repos"
+pattern = "**/*"
+path = "${HOME}/.cargo/git/db"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "rust-target-dirs"
+category = "Rust/Cargo"
+description = "Rust build artifacts (target/)"
+pattern = "**/target"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "Cargo.toml"
+max_depth = 6
+exclude = [".git", "node_modules"]
+
+# ============================================================================
+# NODE.JS
+# ============================================================================
+
+[[rules]]
+name = "node-modules"
+category = "Node.js"
+description = "Node.js dependencies"
+pattern = "**/node_modules"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "package.json"
+max_depth = 6
+exclude = [".git", "target"]
+
+[[rules]]
+name = "npm-cache"
+category = "Node.js"
+description = "npm package cache"
+pattern = "**/*"
+path = "${HOME}/.npm/_cacache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "yarn-cache-macos"
+category = "Node.js"
+description = "Yarn package cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Yarn"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "yarn-cache-linux"
+category = "Node.js"
+description = "Yarn package cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/yarn"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "pnpm-store-macos"
+category = "Node.js"
+description = "pnpm package store (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/pnpm"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "pnpm-store-linux"
+category = "Node.js"
+description = "pnpm package store (Linux)"
+pattern = "**/*"
+path = "${HOME}/.local/share/pnpm/store"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "bun-cache"
+category = "Node.js"
+description = "Bun package cache"
+pattern = "**/*"
+path = "${HOME}/.bun/install/cache"
+match_type = "both"
+min_age_hours = 168
+
+# ============================================================================
+# PYTHON
+# ============================================================================
+
+[[rules]]
+name = "python-pycache"
+category = "Python"
+description = "Python bytecode cache"
+pattern = "**/__pycache__"
+path = "${HOME}"
+match_type = "directory"
+max_depth = 8
+exclude = [".git", "node_modules", "target", ".venv", "venv"]
+
+[[rules]]
+name = "python-venv"
+category = "Python"
+description = "Python virtual environments"
+pattern = "**/.venv"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "pyproject.toml"
+max_depth = 5
+
+[[rules]]
+name = "python-venv-alt"
+category = "Python"
+description = "Python virtual environments (venv/)"
+pattern = "**/venv"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "requirements.txt"
+max_depth = 5
+
+[[rules]]
+name = "pip-cache-macos"
+category = "Python"
+description = "pip package cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/pip"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "pip-cache-linux"
+category = "Python"
+description = "pip package cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/pip"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "conda-pkgs"
+category = "Python"
+description = "Conda package cache"
+pattern = "**/*"
+path = "${HOME}/miniconda3/pkgs"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "conda-pkgs-anaconda"
+category = "Python"
+description = "Anaconda package cache"
+pattern = "**/*"
+path = "${HOME}/anaconda3/pkgs"
+match_type = "both"
+min_age_hours = 168
+
+# ============================================================================
+# ELIXIR/ERLANG
+# ============================================================================
+
+[[rules]]
+name = "elixir-build"
+category = "Elixir/Erlang"
+description = "Elixir build artifacts (_build/)"
+pattern = "**/_build"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "mix.exs"
+max_depth = 5
+
+[[rules]]
+name = "elixir-deps"
+category = "Elixir/Erlang"
+description = "Elixir dependencies (deps/)"
+pattern = "**/deps"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "mix.exs"
+max_depth = 5
+
+[[rules]]
+name = "elixir-ls"
+category = "Elixir/Erlang"
+description = "Elixir Language Server cache"
+pattern = "**/.elixir_ls"
+path = "${HOME}"
+match_type = "directory"
+max_depth = 5
+
+[[rules]]
+name = "hex-cache"
+category = "Elixir/Erlang"
+description = "Hex package cache"
+pattern = "**/*"
+path = "${HOME}/.hex"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "mix-archives"
+category = "Elixir/Erlang"
+description = "Mix archives"
+pattern = "**/*"
+path = "${HOME}/.mix/archives"
+match_type = "both"
+min_age_hours = 720  # 30 days
+
+[[rules]]
+name = "rebar3-cache"
+category = "Elixir/Erlang"
+description = "Rebar3 cache"
+pattern = "**/*"
+path = "${HOME}/.cache/rebar3"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "dialyzer-plt"
+category = "Elixir/Erlang"
+description = "Dialyzer PLT files"
+pattern = "**/*.plt"
+path = "${HOME}"
+match_type = "file"
+min_size_bytes = 10485760  # 10MB
+max_depth = 5
+
+# ============================================================================
+# GO
+# ============================================================================
+
+[[rules]]
+name = "go-mod-cache"
+category = "Go"
+description = "Go module cache"
+pattern = "**/*"
+path = "${HOME}/go/pkg/mod/cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "go-build-cache"
+category = "Go"
+description = "Go build cache"
+pattern = "**/*"
+path = "${HOME}/.cache/go-build"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "go-vendor"
+category = "Go"
+description = "Go vendor directories"
+pattern = "**/vendor"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "go.mod"
+max_depth = 5
+
+# ============================================================================
+# JAVA/JVM
+# ============================================================================
+
+[[rules]]
+name = "gradle-caches"
+category = "Java/JVM"
+description = "Gradle dependency cache"
+pattern = "**/*"
+path = "${HOME}/.gradle/caches"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "maven-repository"
+category = "Java/JVM"
+description = "Maven local repository"
+pattern = "**/*"
+path = "${HOME}/.m2/repository"
+match_type = "both"
+min_age_hours = 720  # 30 days
+
+[[rules]]
+name = "gradle-build"
+category = "Java/JVM"
+description = "Gradle build directories"
+pattern = "**/build"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "build.gradle"
+max_depth = 5
+
+[[rules]]
+name = "gradle-wrapper"
+category = "Java/JVM"
+description = "Project Gradle wrapper cache"
+pattern = "**/.gradle"
+path = "${HOME}"
+match_type = "directory"
+max_depth = 5
+
+# ============================================================================
+# RUBY
+# ============================================================================
+
+[[rules]]
+name = "gem-cache"
+category = "Ruby"
+description = "Ruby gem cache"
+pattern = "**/*"
+path = "${HOME}/.gem"
+match_type = "both"
+min_age_hours = 720
+
+[[rules]]
+name = "bundle-cache"
+category = "Ruby"
+description = "Bundler cache"
+pattern = "**/*"
+path = "${HOME}/.bundle/cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "vendor-bundle"
+category = "Ruby"
+description = "Project vendor bundle"
+pattern = "**/vendor/bundle"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "Gemfile"
+max_depth = 5
+
+# ============================================================================
+# PHP/COMPOSER
+# ============================================================================
+
+[[rules]]
+name = "composer-cache"
+category = "PHP/Composer"
+description = "Composer package cache"
+pattern = "**/*"
+path = "${HOME}/.composer/cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "php-vendor"
+category = "PHP/Composer"
+description = "PHP vendor directories"
+pattern = "**/vendor"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "composer.json"
+max_depth = 5
+exclude = ["bundle"]
+
+# ============================================================================
+# .NET/NUGET
+# ============================================================================
+
+[[rules]]
+name = "nuget-packages"
+category = ".NET/NuGet"
+description = "NuGet package cache"
+pattern = "**/*"
+path = "${HOME}/.nuget/packages"
+match_type = "both"
+min_age_hours = 720
+
+[[rules]]
+name = "dotnet-bin"
+category = ".NET/NuGet"
+description = ".NET build output (bin/)"
+pattern = "**/bin"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "*.csproj"
+max_depth = 5
+
+[[rules]]
+name = "dotnet-obj"
+category = ".NET/NuGet"
+description = ".NET intermediate files (obj/)"
+pattern = "**/obj"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "*.csproj"
+max_depth = 5
+
+# ============================================================================
+# ZIG
+# ============================================================================
+
+[[rules]]
+name = "zig-cache"
+category = "Zig"
+description = "Zig global cache"
+pattern = "**/*"
+path = "${HOME}/.cache/zig"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "zig-cache-local"
+category = "Zig"
+description = "Zig local build cache"
+pattern = "**/zig-cache"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "build.zig"
+max_depth = 5
+
+[[rules]]
+name = "zig-out"
+category = "Zig"
+description = "Zig build output"
+pattern = "**/zig-out"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "build.zig"
+max_depth = 5
+
+# ============================================================================
+# DENO
+# ============================================================================
+
+[[rules]]
+name = "deno-cache"
+category = "Deno"
+description = "Deno cache"
+pattern = "**/*"
+path = "${HOME}/.cache/deno"
+match_type = "both"
+min_age_hours = 168
+
+# ============================================================================
+# SWIFT/IOS
+# ============================================================================
+
+[[rules]]
+name = "swift-build"
+category = "Swift/iOS"
+description = "Swift Package build artifacts"
+pattern = "**/.build"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "Package.swift"
+max_depth = 5
+
+[[rules]]
+name = "spm-cache-macos"
+category = "Swift/iOS"
+description = "Swift Package Manager cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/org.swift.swiftpm"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "cocoapods-cache"
+category = "Swift/iOS"
+description = "CocoaPods cache"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/CocoaPods"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "cocoapods-pods"
+category = "Swift/iOS"
+description = "CocoaPods dependencies"
+pattern = "**/Pods"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "Podfile"
+max_depth = 5
+
+# ============================================================================
+# VERSION MANAGERS
+# ============================================================================
+
+# asdf
+[[rules]]
+name = "asdf-installs"
+category = "Version Managers"
+description = "asdf installed versions"
+pattern = "*"
+path = "${HOME}/.asdf/installs"
+match_type = "directory"
+min_age_hours = 720  # 30 days
+warning = "Old asdf versions - check .tool-versions before deleting"
+
+[[rules]]
+name = "asdf-downloads"
+category = "Version Managers"
+description = "asdf downloaded archives"
+pattern = "**/*"
+path = "${HOME}/.asdf/downloads"
+match_type = "both"
+min_age_hours = 168
+
+# mise (formerly rtx)
+[[rules]]
+name = "mise-installs"
+category = "Version Managers"
+description = "mise installed versions"
+pattern = "*"
+path = "${HOME}/.local/share/mise/installs"
+match_type = "directory"
+min_age_hours = 720
+warning = "Old mise versions - check .mise.toml before deleting"
+
+[[rules]]
+name = "mise-cache"
+category = "Version Managers"
+description = "mise cache"
+pattern = "**/*"
+path = "${HOME}/.cache/mise"
+match_type = "both"
+min_age_hours = 168
+
+# rustup
+[[rules]]
+name = "rustup-toolchains"
+category = "Version Managers"
+description = "Rust toolchains"
+pattern = "*"
+path = "${HOME}/.rustup/toolchains"
+match_type = "directory"
+min_age_hours = 720
+warning = "Old Rust toolchains - check 'rustup show' before deleting"
+
+[[rules]]
+name = "rustup-update-hashes"
+category = "Version Managers"
+description = "Rustup update hashes"
+pattern = "**/*"
+path = "${HOME}/.rustup/update-hashes"
+match_type = "both"
+min_age_hours = 168
+
+# nvm
+[[rules]]
+name = "nvm-versions"
+category = "Version Managers"
+description = "Node.js versions via nvm"
+pattern = "*"
+path = "${HOME}/.nvm/versions/node"
+match_type = "directory"
+min_age_hours = 720
+warning = "Old Node.js versions - check .nvmrc before deleting"
+
+[[rules]]
+name = "nvm-cache"
+category = "Version Managers"
+description = "nvm cache"
+pattern = "**/*"
+path = "${HOME}/.nvm/.cache"
+match_type = "both"
+min_age_hours = 168
+
+# pyenv
+[[rules]]
+name = "pyenv-versions"
+category = "Version Managers"
+description = "Python versions via pyenv"
+pattern = "*"
+path = "${HOME}/.pyenv/versions"
+match_type = "directory"
+min_age_hours = 720
+warning = "Old Python versions - check .python-version before deleting"
+
+# ============================================================================
+# IDE CACHES
+# ============================================================================
+
+# VS Code Stable
+[[rules]]
+name = "vscode-cache-macos"
+category = "IDE Caches"
+description = "VS Code cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Application Support/Code/Cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "vscode-cache-linux"
+category = "IDE Caches"
+description = "VS Code cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.config/Code/Cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "vscode-workspace-macos"
+category = "IDE Caches"
+description = "VS Code workspace storage (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Application Support/Code/User/workspaceStorage"
+match_type = "both"
+min_age_hours = 720
+
+# VS Code Insiders
+[[rules]]
+name = "vscode-insiders-cache-macos"
+category = "IDE Caches"
+description = "VS Code Insiders cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Application Support/Code - Insiders/Cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "vscode-insiders-cache-linux"
+category = "IDE Caches"
+description = "VS Code Insiders cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.config/Code - Insiders/Cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "vscode-insiders-workspace-macos"
+category = "IDE Caches"
+description = "VS Code Insiders workspace storage (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Application Support/Code - Insiders/User/workspaceStorage"
+match_type = "both"
+min_age_hours = 720
+
+# JetBrains IDEs
+[[rules]]
+name = "jetbrains-caches-macos"
+category = "IDE Caches"
+description = "JetBrains IDE caches (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/JetBrains"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "jetbrains-caches-linux"
+category = "IDE Caches"
+description = "JetBrains IDE caches (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/JetBrains"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "jetbrains-logs"
+category = "IDE Caches"
+description = "JetBrains IDE logs"
+pattern = "**/log/**"
+path = "${HOME}/.local/share/JetBrains"
+match_type = "both"
+min_age_hours = 168
+
+# Vim/Neovim
+[[rules]]
+name = "vim-undo"
+category = "IDE Caches"
+description = "Vim undo files"
+pattern = "**/*"
+path = "${HOME}/.vim/undodir"
+match_type = "both"
+min_age_hours = 720
+
+[[rules]]
+name = "neovim-undo"
+category = "IDE Caches"
+description = "Neovim undo files"
+pattern = "**/*"
+path = "${HOME}/.local/state/nvim/undo"
+match_type = "both"
+min_age_hours = 720
+
+[[rules]]
+name = "neovim-swap"
+category = "IDE Caches"
+description = "Neovim swap files"
+pattern = "**/*"
+path = "${HOME}/.local/state/nvim/swap"
+match_type = "both"
+min_age_hours = 24
+
+[[rules]]
+name = "lazy-nvim-cache"
+category = "IDE Caches"
+description = "Lazy.nvim plugin cache"
+pattern = "**/*"
+path = "${HOME}/.local/share/nvim/lazy"
+match_type = "both"
+min_age_hours = 720
+
+# Sublime Text
+[[rules]]
+name = "sublime-cache-macos"
+category = "IDE Caches"
+description = "Sublime Text cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/com.sublimetext.4"
+match_type = "both"
+min_age_hours = 168
+
+# ============================================================================
+# BROWSER CACHES
+# ============================================================================
+
+# Chrome
+[[rules]]
+name = "chrome-cache-macos"
+category = "Browser Caches"
+description = "Google Chrome cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Google/Chrome"
+match_type = "both"
+min_age_hours = 24
+enabled = false  # Disabled by default - risky
+
+[[rules]]
+name = "chrome-cache-linux"
+category = "Browser Caches"
+description = "Google Chrome cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/google-chrome"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Chromium
+[[rules]]
+name = "chromium-cache-macos"
+category = "Browser Caches"
+description = "Chromium cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Chromium"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+[[rules]]
+name = "chromium-cache-linux"
+category = "Browser Caches"
+description = "Chromium cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/chromium"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Microsoft Edge
+[[rules]]
+name = "edge-cache-macos"
+category = "Browser Caches"
+description = "Microsoft Edge cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Microsoft Edge"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+[[rules]]
+name = "edge-cache-linux"
+category = "Browser Caches"
+description = "Microsoft Edge cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/microsoft-edge"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Brave
+[[rules]]
+name = "brave-cache-macos"
+category = "Browser Caches"
+description = "Brave Browser cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/BraveSoftware/Brave-Browser"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+[[rules]]
+name = "brave-cache-linux"
+category = "Browser Caches"
+description = "Brave Browser cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/BraveSoftware/Brave-Browser"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Vivaldi
+[[rules]]
+name = "vivaldi-cache-macos"
+category = "Browser Caches"
+description = "Vivaldi cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Vivaldi"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+[[rules]]
+name = "vivaldi-cache-linux"
+category = "Browser Caches"
+description = "Vivaldi cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/vivaldi"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Arc
+[[rules]]
+name = "arc-cache-macos"
+category = "Browser Caches"
+description = "Arc Browser cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Arc"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Opera
+[[rules]]
+name = "opera-cache-macos"
+category = "Browser Caches"
+description = "Opera cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/com.operasoftware.Opera"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+[[rules]]
+name = "opera-cache-linux"
+category = "Browser Caches"
+description = "Opera cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/opera"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Firefox
+[[rules]]
+name = "firefox-cache-macos"
+category = "Browser Caches"
+description = "Firefox cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Firefox"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+[[rules]]
+name = "firefox-cache-linux"
+category = "Browser Caches"
+description = "Firefox cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/mozilla/firefox"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Firefox Developer Edition
+[[rules]]
+name = "firefox-dev-cache-macos"
+category = "Browser Caches"
+description = "Firefox Developer Edition cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Firefox Developer Edition"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# Safari
+[[rules]]
+name = "safari-cache-macos"
+category = "Browser Caches"
+description = "Safari cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/com.apple.Safari"
+match_type = "both"
+min_age_hours = 24
+enabled = false
+
+# ============================================================================
+# DEVOPS
+# ============================================================================
+
+# Kubernetes
+[[rules]]
+name = "kubectl-cache"
+category = "DevOps"
+description = "kubectl cache"
+pattern = "**/*"
+path = "${HOME}/.kube/cache"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "helm-cache-macos"
+category = "DevOps"
+description = "Helm cache (macOS)"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/helm"
+match_type = "both"
+min_age_hours = 168
+
+[[rules]]
+name = "helm-cache-linux"
+category = "DevOps"
+description = "Helm cache (Linux)"
+pattern = "**/*"
+path = "${HOME}/.cache/helm"
+match_type = "both"
+min_age_hours = 168
+
+# Terraform
+[[rules]]
+name = "terraform-plugin-cache"
+category = "DevOps"
+description = "Terraform plugin cache"
+pattern = "**/*"
+path = "${HOME}/.terraform.d/plugin-cache"
+match_type = "both"
+min_age_hours = 720
+
+[[rules]]
+name = "terraform-local"
+category = "DevOps"
+description = "Terraform local directories"
+pattern = "**/.terraform"
+path = "${HOME}"
+match_type = "directory"
+project_marker = "*.tf"
+max_depth = 5
+
+# ============================================================================
+# SYSTEM
+# ============================================================================
+
+# Homebrew (macOS)
+[[rules]]
+name = "homebrew-downloads"
+category = "System"
+description = "Homebrew download cache"
+pattern = "**/*"
+path = "${HOME}/Library/Caches/Homebrew/downloads"
+match_type = "both"
+min_age_hours = 168
+
+# Xcode (macOS)
+[[rules]]
+name = "xcode-deriveddata"
+category = "System"
+description = "Xcode DerivedData"
+pattern = "**/*"
+path = "${HOME}/Library/Developer/Xcode/DerivedData"
+match_type = "both"
+min_age_hours = 168
+risky = true
+warning = "Xcode build cache - will slow down next build"
+
+[[rules]]
+name = "xcode-device-support"
+category = "System"
+description = "iOS Device Support files"
+pattern = "*"
+path = "${HOME}/Library/Developer/Xcode/iOS DeviceSupport"
+match_type = "directory"
+min_age_hours = 720
+warning = "Old iOS versions - may need for older device debugging"
+
+[[rules]]
+name = "xcode-simulators"
+category = "System"
+description = "iOS Simulator devices"
+pattern = "*"
+path = "${HOME}/Library/Developer/CoreSimulator/Devices"
+match_type = "directory"
+min_age_hours = 720
+risky = true
+warning = "Simulator devices - use 'xcrun simctl list' to check"
+
+# Trash
+[[rules]]
+name = "trash-macos"
+category = "System"
+description = "Trash (macOS)"
+pattern = "**/*"
+path = "${HOME}/.Trash"
+match_type = "both"
+min_age_hours = 168
+risky = true
+warning = "Items in Trash"
+
+[[rules]]
+name = "trash-linux"
+category = "System"
+description = "Trash (Linux)"
+pattern = "**/*"
+path = "${HOME}/.local/share/Trash"
+match_type = "both"
+min_age_hours = 168
+risky = true
+warning = "Items in Trash"
+
+# Downloads (kept from original)
+[[rules]]
+name = "downloads"
+category = "System"
+description = "Old downloads"
+pattern = "**/*"
+path = "${HOME}/Downloads"
+match_type = "both"
+min_age_hours = 720  # 30 days
