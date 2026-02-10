@@ -536,6 +536,10 @@ impl App {
         if let Some(handle) = self.cleanup_scan_thread.as_ref() {
             if handle.is_finished() {
                 let handle = self.cleanup_scan_thread.take().unwrap();
+                self.cleanup_scanning = false;
+                self.cleanup_scan_progress = None;
+                self.cleanup_scan_rx = None;
+
                 if let Ok(results) = handle.join() {
                     self.cleanup_candidates = results;
                     self.cleanup_categories =
@@ -545,16 +549,15 @@ impl App {
                         .iter()
                         .map(|c| c.name.clone())
                         .collect();
-                    self.cleanup_scanning = false;
-                    self.cleanup_scan_progress = None;
                     self.apply_selection_and_save();
                     self.notification = Some(format!(
                         "Cleanup scan complete: {} candidates",
                         self.cleanup_candidates.len()
                     ));
-                    self.notification_time = Some(Instant::now());
+                } else {
+                    self.notification = Some("Cleanup scan failed".to_string());
                 }
-                self.cleanup_scan_rx = None;
+                self.notification_time = Some(Instant::now());
             }
         }
     }
