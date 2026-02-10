@@ -27,35 +27,12 @@ enum Commands {
 }
 
 #[derive(Parser)]
-pub struct CleanupCommand {
-    /// Scan for cleanable items without deleting
-    #[arg(long)]
-    scan: bool,
-
-    /// Show what would be deleted without actually deleting
-    #[arg(long)]
-    dry_run: bool,
-
-    /// Actually delete the items (requires --confirm)
-    #[arg(long)]
-    delete: bool,
-
-    /// Confirm deletion (required with --delete)
-    #[arg(long)]
-    confirm: bool,
-
-    /// Path to scan (defaults to home directory)
-    #[arg(value_name = "PATH")]
-    path: Option<PathBuf>,
-}
+pub struct CleanupCommand {}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    if let Some(Commands::Cleanup(cmd)) = cli.command {
-        return run_cleanup_command(cmd);
-    }
-
+    let cleanup_mode = matches!(cli.command, Some(Commands::Cleanup(_)));
     let start_path = validate_start_path(cli.path)?;
 
     // Setup terminal
@@ -67,10 +44,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     terminal.hide_cursor()?;
 
     // Run app
-    let app = match start_path {
+    let mut app = match start_path {
         Some(path) => App::new_with_root(path),
         None => App::new(),
     };
+
+    if cleanup_mode {
+        let _ = app.start_cleanup_scan();
+    }
+
     let result = run_app(&mut terminal, app);
 
     // Cleanup terminal - always restore state even on error
@@ -83,79 +65,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
-}
-
-fn run_cleanup_command(cmd: CleanupCommand) -> Result<(), Box<dyn Error>> {
-    use mcdu_core::{scan, CleanupConfig, PlatformPaths};
-    use std::time::SystemTime;
-
-    let platform = PlatformPaths::detect().ok_or("Failed to detect platform paths")?;
-    let mut config = CleanupConfig::default();
-
-    let scan_path = cmd
-        .path
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")));
-    config.scan_paths = vec![scan_path.to_string_lossy().to_string()];
-
-    if cmd.scan || cmd.dry_run || cmd.delete {
-        println!("Scanning {}...", scan_path.display());
-        let results = scan(&config, &platform, None, SystemTime::now());
-
-        let total_size: u64 = results.iter().map(|r| r.size_bytes).sum();
-        println!(
-            "\nFound {} items ({} total):",
-            results.len(),
-            format_size(total_size)
-        );
-
-        for result in &results {
-            println!(
-                "  {} ({}) - {}",
-                result.path.display(),
-                format_size(result.size_bytes),
-                result.rule_name
-            );
-        }
-
-        if cmd.dry_run {
-            println!("\nDry run - no files were deleted.");
-        } else if cmd.delete {
-            if !cmd.confirm {
-                eprintln!("Error: --delete requires --confirm flag for safety");
-                return Err("Missing --confirm flag".into());
-            }
-
-            println!("\nDeleting {} items...", results.len());
-            for result in &results {
-                if let Err(e) = std::fs::remove_dir_all(&result.path) {
-                    eprintln!("Failed to delete {}: {}", result.path.display(), e);
-                } else {
-                    println!("Deleted: {}", result.path.display());
-                }
-            }
-            println!("Cleanup complete.");
-        }
-    } else {
-        println!("Usage: mcdu cleanup [--scan|--dry-run|--delete --confirm] [PATH]");
-    }
-
-    Ok(())
-}
-
-fn format_size(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-
-    if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.1} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{} B", bytes)
-    }
 }
 
 fn validate_start_path(path: Option<PathBuf>) -> Result<Option<PathBuf>, Box<dyn Error>> {
