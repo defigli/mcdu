@@ -83,64 +83,66 @@ fn disk_usage(metadata: &std::fs::Metadata) -> u64 {
     metadata.len()
 }
 
+/// Skip directories that are build artifacts or hidden (never contain project roots)
+fn should_skip_dir(name: &str) -> bool {
+    (name.starts_with('.') && name != ".git")
+        || matches!(
+            name,
+            "node_modules" | "target" | "_build" | "vendor" | "build" | "dist" | "__pycache__"
+        )
+}
+
 /// Find project roots containing a specific marker file
 fn find_project_roots(scan_paths: &[PathBuf], marker: &str, max_depth: usize) -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    
-    // Handle glob patterns in marker (e.g., "*.csproj")
     let is_glob = marker.contains('*');
-    
+
     for scan_path in scan_paths {
         if !scan_path.exists() {
             continue;
         }
-        
-        for entry in WalkDir::new(scan_path)
+
+        // filter_entry prunes entire subtrees (vs continue which only skips one entry)
+        let walker = WalkDir::new(scan_path)
             .max_depth(max_depth)
+            .follow_links(false)
             .into_iter()
-            .filter_map(|e| e.ok())
-        {
+            .filter_entry(|e| {
+                e.file_type().is_dir()
+                    && e.file_name()
+                        .to_str()
+                        .map(|n| !should_skip_dir(n))
+                        .unwrap_or(true)
+            });
+
+        for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();
-            
-            // Skip common non-project directories for performance
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.starts_with('.') && name != ".git" {
-                    continue;
-                }
-                if name == "node_modules" || name == "target" || name == "_build" || name == "vendor" {
-                    continue;
-                }
-            }
-            
-            if path.is_dir() {
-                let has_marker = if is_glob {
-                    // For glob patterns, check if any file in dir matches
-                    if let Ok(pattern) = Pattern::new(marker) {
-                        std::fs::read_dir(path)
-                            .map(|entries| {
-                                entries.filter_map(|e| e.ok()).any(|e| {
-                                    e.file_name()
-                                        .to_str()
-                                        .map(|name| pattern.matches(name))
-                                        .unwrap_or(false)
-                                })
+
+            let has_marker = if is_glob {
+                if let Ok(pattern) = Pattern::new(marker) {
+                    std::fs::read_dir(path)
+                        .map(|entries| {
+                            entries.filter_map(|e| e.ok()).any(|e| {
+                                e.file_name()
+                                    .to_str()
+                                    .map(|n| pattern.matches(n))
+                                    .unwrap_or(false)
                             })
-                            .unwrap_or(false)
-                    } else {
-                        false
-                    }
+                        })
+                        .unwrap_or(false)
                 } else {
-                    // Simple file existence check
-                    path.join(marker).exists()
-                };
-                
-                if has_marker {
-                    roots.push(path.to_path_buf());
+                    false
                 }
+            } else {
+                path.join(marker).exists()
+            };
+
+            if has_marker {
+                roots.push(path.to_path_buf());
             }
         }
     }
-    
+
     roots
 }
 
@@ -341,7 +343,7 @@ fn scan_path_with_rule(
 ) {
     // Build walker with max_depth if specified
     let walker = {
-        let mut w = WalkDir::new(base_path);
+        let mut w = WalkDir::new(base_path).follow_links(false);
         if let Some(depth) = rule.max_depth {
             w = w.max_depth(depth as usize);
         }
@@ -350,7 +352,7 @@ fn scan_path_with_rule(
 
     for entry in walker.into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        
+
         // Skip if inside an already-matched directory
         if matched_dirs.iter().any(|d| path.starts_with(d) && path != d) {
             continue;
