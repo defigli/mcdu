@@ -497,10 +497,18 @@ impl App {
     }
 
     pub fn start_cleanup_scan(&mut self) -> Result<(), String> {
+        self.start_cleanup_scan_with_path(None)
+    }
+
+    pub fn start_cleanup_scan_with_path(&mut self, scan_path: Option<PathBuf>) -> Result<(), String> {
         let platform_paths = cleanup::platform::PlatformPaths::detect()
             .ok_or_else(|| "Unable to detect platform paths".to_string())?;
         let config_paths = cleanup::config::default_config_paths(&platform_paths);
-        let config = cleanup::config::load_config(&config_paths).map_err(|e| e.to_string())?;
+        let mut config = cleanup::config::load_config(&config_paths).map_err(|e| e.to_string())?;
+
+        if let Some(path) = scan_path {
+            config.scan_paths = vec![path.to_string_lossy().to_string()];
+        }
         let state = cleanup::config::load_state(&config_paths).map_err(|e| e.to_string())?;
         self.cleanup_selected = state.selected.into_iter().map(PathBuf::from).collect();
         self.cleanup_selected_index = 0;

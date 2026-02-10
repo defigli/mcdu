@@ -27,13 +27,19 @@ enum Commands {
 }
 
 #[derive(Parser)]
-pub struct CleanupCommand {}
+pub struct CleanupCommand {
+    /// Path to scan for cleanup candidates
+    #[arg(value_name = "PATH")]
+    path: Option<PathBuf>,
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    let cleanup_mode = matches!(cli.command, Some(Commands::Cleanup(_)));
-    let start_path = validate_start_path(cli.path)?;
+    let (cleanup_mode, start_path) = match cli.command {
+        Some(Commands::Cleanup(ref cmd)) => (true, validate_start_path(cmd.path.clone())?),
+        _ => (false, validate_start_path(cli.path)?),
+    };
 
     // Setup terminal
     enable_raw_mode()?;
@@ -44,14 +50,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     terminal.hide_cursor()?;
 
     // Run app
-    let mut app = match start_path {
-        Some(path) => App::new_with_root(path),
-        None => App::new(),
+    let app = match (&start_path, cleanup_mode) {
+        (_, true) => {
+            let mut a = App::new();
+            let _ = a.start_cleanup_scan_with_path(start_path);
+            a
+        }
+        (Some(path), false) => App::new_with_root(path.clone()),
+        (None, false) => App::new(),
     };
-
-    if cleanup_mode {
-        let _ = app.start_cleanup_scan();
-    }
 
     let result = run_app(&mut terminal, app);
 
