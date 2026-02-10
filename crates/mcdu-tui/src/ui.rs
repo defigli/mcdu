@@ -349,7 +349,11 @@ fn draw_cleanup_loading(f: &mut Frame, count: Option<usize>) {
 fn draw_cleanup(f: &mut Frame, app: &App, area: Rect) {
     let layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(1)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
         .split(area);
 
     draw_cleanup_tabs(f, app, layout[0]);
@@ -360,6 +364,22 @@ fn draw_cleanup(f: &mut Frame, app: &App, area: Rect) {
         CleanupTab::Files => draw_cleanup_files(f, app, layout[1]),
         CleanupTab::Quarantine => draw_cleanup_quarantine(f, app, layout[1]),
     }
+
+    let hints = Line::from(vec![
+        Span::styled(" q", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" Browse  "),
+        Span::styled("Tab", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" Switch tab  "),
+        Span::styled("Space", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" Select  "),
+        Span::styled("d", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" Delete  "),
+        Span::styled("a/n", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" All/None  "),
+        Span::styled("C", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" Rescan"),
+    ]);
+    f.render_widget(Paragraph::new(hints).style(Style::default().bg(Color::DarkGray)), layout[2]);
 }
 
 fn draw_cleanup_tabs(f: &mut Frame, app: &App, area: Rect) {
