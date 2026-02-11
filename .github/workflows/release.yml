@@ -15,7 +15,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: linux-x86_64
+          - os: linux-x86_64-musl
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            static: true
+          - os: linux-aarch64-musl
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            static: true
+          - os: linux-x86_64-gnu
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: macos-x86_64
@@ -87,6 +95,30 @@ jobs:
         with:
           path: artifacts
 
+      - name: Calculate and display checksums
+        id: checksums
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          LINUX_MUSL_X86_SHA=$(sha256sum artifacts/mcdu-linux-x86_64-musl/mcdu-linux-x86_64-musl.tar.gz | cut -d' ' -f1)
+          LINUX_MUSL_ARM_SHA=$(sha256sum artifacts/mcdu-linux-aarch64-musl/mcdu-linux-aarch64-musl.tar.gz | cut -d' ' -f1)
+          LINUX_GNU_X86_SHA=$(sha256sum artifacts/mcdu-linux-x86_64-gnu/mcdu-linux-x86_64-gnu.tar.gz | cut -d' ' -f1)
+          MACOS_X86_SHA=$(sha256sum artifacts/macos-x86_64/mcdu-macos-x86_64.tar.gz | cut -d' ' -f1)
+          MACOS_ARM_SHA=$(sha256sum artifacts/macos-aarch64/mcdu-macos-aarch64.tar.gz | cut -d' ' -f1)
+
+          echo "## Binary Checksums for $VERSION" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Linux (Static - works everywhere)" >> release-notes.md
+          echo "**x86_64:** \`$LINUX_MUSL_X86_SHA\`" >> release-notes.md
+          echo "**aarch64:** \`$LINUX_MUSL_ARM_SHA\`" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Linux (GNU)" >> release-notes.md
+          echo "**x86_64:** \`$LINUX_GNU_X86_SHA\`" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### macOS" >> release-notes.md
+          echo "**x86_64:** \`$MACOS_X86_SHA\`" >> release-notes.md
+          echo "**aarch64:** \`$MACOS_ARM_SHA\`" >> release-notes.md
+          echo "" >> release-notes.md
+
       - name: Generate release notes
         id: notes
         run: |
@@ -113,73 +145,3 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-homebrew:
-    name: Update Homebrew Formula
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download artifacts for SHA256
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Set up Homebrew
-        run: |
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          echo "$HOME/homebrew/bin" >> $GITHUB_PATH
-
-      - name: Calculate SHA256 checksums
-        id: checksums
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          LINUX_SHA=$(sha256sum artifacts/mcdu-linux-x86_64/mcdu-linux-x86_64.tar.gz | cut -d' ' -f1)
-          MACOS_X86_SHA=$(sha256sum artifacts/macos-x86_64/mcdu-macos-x86_64.tar.gz | cut -d' ' -f1)
-          MACOS_ARM_SHA=$(sha256sum artifacts/macos-aarch64/mcdu-macos-aarch64.tar.gz | cut -d' ' -f1)
-
-          {
-            echo "version=$VERSION"
-            echo "linux_sha=$LINUX_SHA"
-            echo "macos_x86_sha=$MACOS_X86_SHA"
-            echo "macos_arm_sha=$MACOS_ARM_SHA"
-          } >> $GITHUB_OUTPUT
-
-      - name: Update formula
-        run: |
-          VERSION="${{ steps.checksums.outputs.version }}"
-          LINUX_SHA="${{ steps.checksums.outputs.linux_sha }}"
-          MACOS_X86_SHA="${{ steps.checksums.outputs.macos_x86_sha }}"
-          MACOS_ARM_SHA="${{ steps.checksums.outputs.macos_arm_sha }}"
-
-          sed -i.bak \
-            -e "s|url \"https://archive.github.com|url \"https://github.com|" \
-            -e "s/version \"[^\"]*\"/version \"$VERSION\"/" \
-            -e "s/sha256 \"linux\" \"[^\"]*\"/sha256 \"linux\" \"$LINUX_SHA\"/" \
-            -e "s/sha256 \"macos_x86_64\" \"[^\"]*\"/sha256 \"macos_x86_64\" \"$MACOS_X86_SHA\"/" \
-            -e "s/sha256 \"macos_aarch64\" \"[^\"]*\"/sha256 \"macos_aarch64\" \"$MACOS_ARM_SHA\"/" \
-            packaging/homebrew/mcdu.rb
-          rm packaging/homebrew/mcdu.rb.bak
-
-      - name: Create PR to homebrew-tap
-        uses: peter-evans/create-pull-request@v7
-        with:
-          title: "Update mcdu to ${{ steps.checksums.outputs.version }}"
-          branch: "update-mcdu-${{ steps.checksums.outputs.version }}"
-          path: packaging/homebrew/
-          commit-message: "Update mcdu to ${{ steps.checksums.outputs.version }}"
-          body: |
-            Updates mcdu formula to version ${{ steps.checksums.outputs.version }}.
-
-            SHA256 checksums:
-            - Linux: ${{ steps.checksums.outputs.linux_sha }}
-            - macOS x86_64: ${{ steps.checksums.outputs.macos_x86_sha }}
-            - macOS aarch64: ${{ steps.checksums.outputs.macos_arm_sha }}
-
-            Published by: @${{ github.actor }}
-          base: master
-          labels: automated pr
-          delete-branch: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
