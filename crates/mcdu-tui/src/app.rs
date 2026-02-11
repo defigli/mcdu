@@ -500,7 +500,10 @@ impl App {
         self.start_cleanup_scan_with_path(None)
     }
 
-    pub fn start_cleanup_scan_with_path(&mut self, scan_path: Option<PathBuf>) -> Result<(), String> {
+    pub fn start_cleanup_scan_with_path(
+        &mut self,
+        scan_path: Option<PathBuf>,
+    ) -> Result<(), String> {
         let platform_paths = cleanup::platform::PlatformPaths::detect()
             .ok_or_else(|| "Unable to detect platform paths".to_string())?;
         let config_paths = cleanup::config::default_config_paths(&platform_paths);

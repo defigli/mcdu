@@ -366,20 +366,53 @@ fn draw_cleanup(f: &mut Frame, app: &App, area: Rect) {
     }
 
     let hints = Line::from(vec![
-        Span::styled(" q", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " q",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Browse  "),
-        Span::styled("Tab", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Tab",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Switch tab  "),
-        Span::styled("Space", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Space",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Select  "),
-        Span::styled("d", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "d",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Delete  "),
-        Span::styled("a/n", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "a/n",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" All/None  "),
-        Span::styled("C", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "C",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Rescan"),
     ]);
-    f.render_widget(Paragraph::new(hints).style(Style::default().bg(Color::DarkGray)), layout[2]);
+    f.render_widget(
+        Paragraph::new(hints).style(Style::default().bg(Color::DarkGray)),
+        layout[2],
+    );
 }
 
 fn draw_cleanup_tabs(f: &mut Frame, app: &App, area: Rect) {

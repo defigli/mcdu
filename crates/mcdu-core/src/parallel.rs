@@ -4,7 +4,7 @@
 
 use crate::config::CleanupConfig;
 use crate::platform::PlatformPaths;
-use crate::rules::{Candidate, Rule, MatchType};
+use crate::rules::{Candidate, MatchType, Rule};
 use crate::scanner::{CategoryGroup, ScanProgress};
 use glob::Pattern;
 use rayon::prelude::*;
@@ -30,7 +30,7 @@ pub struct ParallelScanConfig {
 impl Default for ParallelScanConfig {
     fn default() -> Self {
         Self {
-            num_threads: 0, // Auto
+            num_threads: 0,  // Auto
             cpu_ratio: 0.75, // Use 75% of CPUs by default
         }
     }
@@ -90,7 +90,7 @@ impl ParallelScanner {
             scan_config,
         }
     }
-    
+
     /// Scan all rules in parallel by category
     pub fn scan(
         &self,
@@ -98,77 +98,86 @@ impl ParallelScanner {
         now: SystemTime,
     ) -> Vec<Candidate> {
         let num_threads = self.scan_config.effective_threads();
-        
+
         // Build custom thread pool
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads)
             .thread_name(|i| format!("mcdu-scan-{}", i))
             .build()
             .expect("Failed to build thread pool");
-        
+
         // Shared progress counters
         let found_count = Arc::new(AtomicU64::new(0));
         let total_size = Arc::new(AtomicU64::new(0));
         let matched_dirs = Arc::new(Mutex::new(HashSet::<PathBuf>::new()));
-        
+
         // Resolve scan paths once
-        let scan_paths: Vec<PathBuf> = self.config.scan_paths
+        let scan_paths: Vec<PathBuf> = self
+            .config
+            .scan_paths
             .iter()
             .filter_map(|p| self.platform_paths.resolve_path(p))
             .collect();
-        
+
         // Get unique categories
-        let categories: Vec<String> = self.config.rules
+        let categories: Vec<String> = self
+            .config
+            .rules
             .iter()
             .filter(|r| r.enabled)
             .map(|r| r.category.clone())
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
-        
+
         // Process categories in parallel
         let results: Vec<Vec<Candidate>> = pool.install(|| {
-            categories.par_iter().map(|category| {
-                let category_rules: Vec<&Rule> = self.config.rules
-                    .iter()
-                    .filter(|r| r.category == *category && r.enabled)
-                    .collect();
-                
-                // Send progress
-                if let Some(ref tx) = progress_tx {
-                    let _ = tx.send(ScanProgress {
-                        current_path: None,
-                        found_count: found_count.load(Ordering::Relaxed),
-                        total_size: total_size.load(Ordering::Relaxed),
-                        current_category: Some(category.clone()),
-                    });
-                }
-                
-                let mut category_candidates = Vec::new();
-                
-                for rule in category_rules {
-                    self.scan_rule(
-                        rule,
-                        &scan_paths,
-                        now,
-                        &found_count,
-                        &total_size,
-                        &matched_dirs,
-                        &mut category_candidates,
-                        progress_tx.as_ref(),
-                    );
-                }
-                
-                category_candidates
-            }).collect()
+            categories
+                .par_iter()
+                .map(|category| {
+                    let category_rules: Vec<&Rule> = self
+                        .config
+                        .rules
+                        .iter()
+                        .filter(|r| r.category == *category && r.enabled)
+                        .collect();
+
+                    // Send progress
+                    if let Some(ref tx) = progress_tx {
+                        let _ = tx.send(ScanProgress {
+                            current_path: None,
+                            found_count: found_count.load(Ordering::Relaxed),
+                            total_size: total_size.load(Ordering::Relaxed),
+                            current_category: Some(category.clone()),
+                        });
+                    }
+
+                    let mut category_candidates = Vec::new();
+
+                    for rule in category_rules {
+                        self.scan_rule(
+                            rule,
+                            &scan_paths,
+                            now,
+                            &found_count,
+                            &total_size,
+                            &matched_dirs,
+                            &mut category_candidates,
+                            progress_tx.as_ref(),
+                        );
+                    }
+
+                    category_candidates
+                })
+                .collect()
         });
-        
+
         // Flatten and sort
         let mut all: Vec<Candidate> = results.into_iter().flatten().collect();
         all.sort_by(|a, b| a.rule_category.cmp(&b.rule_category));
         all
     }
-    
+
     fn scan_rule(
         &self,
         rule: &Rule,
@@ -182,20 +191,30 @@ impl ParallelScanner {
     ) {
         // Handle project_marker rules
         if let Some(ref marker) = rule.project_marker {
-            self.scan_project_marker(rule, marker, scan_paths, now, found_count, total_size, matched_dirs, results, progress_tx);
+            self.scan_project_marker(
+                rule,
+                marker,
+                scan_paths,
+                now,
+                found_count,
+                total_size,
+                matched_dirs,
+                results,
+                progress_tx,
+            );
             return;
         }
-        
+
         // Standard path scanning
         let base_path = match rule.resolve_base_path(&self.platform_paths) {
             Some(p) => p,
             None => return,
         };
-        
+
         if !base_path.exists() {
             return;
         }
-        
+
         let walker = {
             let mut w = WalkDir::new(&base_path);
             if let Some(depth) = rule.max_depth {
@@ -203,14 +222,14 @@ impl ParallelScanner {
             }
             w
         };
-        
+
         for entry in walker.into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
             let metadata = match entry.metadata() {
                 Ok(m) => m,
                 Err(_) => continue,
             };
-            
+
             // Check already matched
             {
                 let dirs = matched_dirs.lock().unwrap();
@@ -218,24 +237,32 @@ impl ParallelScanner {
                     continue;
                 }
             }
-            
+
             let is_dir = metadata.is_dir();
             let is_file = metadata.is_file();
-            
+
             match rule.match_type {
-                MatchType::File => if !is_file { continue; },
+                MatchType::File => {
+                    if !is_file {
+                        continue;
+                    }
+                }
                 MatchType::Directory => {
-                    if !is_dir || path == base_path { continue; }
-                },
+                    if !is_dir || path == base_path {
+                        continue;
+                    }
+                }
                 MatchType::Both => {
-                    if path == base_path { continue; }
-                },
+                    if path == base_path {
+                        continue;
+                    }
+                }
             }
-            
+
             if !rule.matches(&self.platform_paths, path, &metadata, now) {
                 continue;
             }
-            
+
             let path_buf = path.to_path_buf();
             {
                 let dirs = matched_dirs.lock().unwrap();
@@ -243,13 +270,19 @@ impl ParallelScanner {
                     continue;
                 }
             }
-            
-            let size = if is_dir { dir_size(path) } else { disk_usage(&metadata) };
-            let is_active = metadata.modified().ok()
+
+            let size = if is_dir {
+                dir_size(path)
+            } else {
+                disk_usage(&metadata)
+            };
+            let is_active = metadata
+                .modified()
+                .ok()
                 .and_then(|m| now.duration_since(m).ok())
                 .map(|d| d < std::time::Duration::from_secs(48 * 3600))
                 .unwrap_or(false);
-            
+
             let candidate = Candidate::new(
                 path_buf.clone(),
                 rule.name.clone(),
@@ -258,17 +291,19 @@ impl ParallelScanner {
                 size,
                 metadata.accessed().ok(),
                 is_active,
-            ).with_directory(is_dir).with_warning(rule.warning.clone());
-            
+            )
+            .with_directory(is_dir)
+            .with_warning(rule.warning.clone());
+
             results.push(candidate);
-            
+
             if is_dir {
                 matched_dirs.lock().unwrap().insert(path_buf.clone());
             }
-            
+
             found_count.fetch_add(1, Ordering::Relaxed);
             total_size.fetch_add(size, Ordering::Relaxed);
-            
+
             if let Some(tx) = progress_tx {
                 let _ = tx.send(ScanProgress {
                     current_path: Some(path_buf),
@@ -279,7 +314,7 @@ impl ParallelScanner {
             }
         }
     }
-    
+
     fn scan_project_marker(
         &self,
         rule: &Rule,
@@ -293,78 +328,126 @@ impl ParallelScanner {
         progress_tx: Option<&mpsc::Sender<ScanProgress>>,
     ) {
         let max_depth = rule.max_depth.unwrap_or(6) as usize;
-        let artifact_name = rule.pattern.trim_start_matches("**/").trim_start_matches("*/");
+        let artifact_name = rule
+            .pattern
+            .trim_start_matches("**/")
+            .trim_start_matches("*/");
         let is_glob = marker.contains('*');
-        
+
         for scan_path in scan_paths {
-            if !scan_path.exists() { continue; }
-            
-            for entry in WalkDir::new(scan_path).max_depth(max_depth).into_iter().filter_map(|e| e.ok()) {
+            if !scan_path.exists() {
+                continue;
+            }
+
+            for entry in WalkDir::new(scan_path)
+                .max_depth(max_depth)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
                 let path = entry.path();
-                if !path.is_dir() { continue; }
-                
+                if !path.is_dir() {
+                    continue;
+                }
+
                 // Skip common non-project dirs
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name == "node_modules" || name == "target" || name == "_build" || name == "vendor" {
+                    if name == "node_modules"
+                        || name == "target"
+                        || name == "_build"
+                        || name == "vendor"
+                    {
                         continue;
                     }
                 }
-                
+
                 let has_marker = if is_glob {
                     if let Ok(pattern) = Pattern::new(marker) {
-                        std::fs::read_dir(path).map(|entries| {
-                            entries.filter_map(|e| e.ok()).any(|e| {
-                                e.file_name().to_str().map(|n| pattern.matches(n)).unwrap_or(false)
+                        std::fs::read_dir(path)
+                            .map(|entries| {
+                                entries.filter_map(|e| e.ok()).any(|e| {
+                                    e.file_name()
+                                        .to_str()
+                                        .map(|n| pattern.matches(n))
+                                        .unwrap_or(false)
+                                })
                             })
-                        }).unwrap_or(false)
-                    } else { false }
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
                 } else {
                     path.join(marker).exists()
                 };
-                
-                if !has_marker { continue; }
-                
+
+                if !has_marker {
+                    continue;
+                }
+
                 let artifact_path = path.join(artifact_name);
-                
+
                 {
                     let dirs = matched_dirs.lock().unwrap();
-                    if dirs.contains(&artifact_path) { continue; }
+                    if dirs.contains(&artifact_path) {
+                        continue;
+                    }
                 }
-                
-                if !artifact_path.exists() { continue; }
-                
+
+                if !artifact_path.exists() {
+                    continue;
+                }
+
                 let metadata = match std::fs::metadata(&artifact_path) {
                     Ok(m) => m,
                     Err(_) => continue,
                 };
-                
+
                 let is_dir = metadata.is_dir();
                 match rule.match_type {
-                    MatchType::File => if !metadata.is_file() { continue; },
-                    MatchType::Directory => if !is_dir { continue; },
-                    MatchType::Both => {},
+                    MatchType::File => {
+                        if !metadata.is_file() {
+                            continue;
+                        }
+                    }
+                    MatchType::Directory => {
+                        if !is_dir {
+                            continue;
+                        }
+                    }
+                    MatchType::Both => {}
                 }
-                
+
                 if let Some(min_age) = rule.min_age_hours {
                     if let Ok(modified) = metadata.modified() {
                         let age = std::time::Duration::from_secs(min_age * 3600);
-                        if now.duration_since(modified).map(|d| d < age).unwrap_or(true) {
+                        if now
+                            .duration_since(modified)
+                            .map(|d| d < age)
+                            .unwrap_or(true)
+                        {
                             continue;
                         }
                     }
                 }
-                
-                let size = if is_dir { dir_size(&artifact_path) } else { disk_usage(&metadata) };
-                
+
+                let size = if is_dir {
+                    dir_size(&artifact_path)
+                } else {
+                    disk_usage(&metadata)
+                };
+
                 if let Some(min_size) = rule.min_size_bytes {
-                    if size < min_size { continue; }
+                    if size < min_size {
+                        continue;
+                    }
                 }
-                
-                let is_active = metadata.modified().ok()
+
+                let is_active = metadata
+                    .modified()
+                    .ok()
                     .and_then(|m| now.duration_since(m).ok())
                     .map(|d| d < std::time::Duration::from_secs(48 * 3600))
                     .unwrap_or(false);
-                
+
                 let candidate = Candidate::new(
                     artifact_path.clone(),
                     rule.name.clone(),
@@ -373,14 +456,16 @@ impl ParallelScanner {
                     size,
                     metadata.accessed().ok(),
                     is_active,
-                ).with_directory(is_dir).with_warning(rule.warning.clone());
-                
+                )
+                .with_directory(is_dir)
+                .with_warning(rule.warning.clone());
+
                 results.push(candidate);
                 matched_dirs.lock().unwrap().insert(artifact_path.clone());
-                
+
                 found_count.fetch_add(1, Ordering::Relaxed);
                 total_size.fetch_add(size, Ordering::Relaxed);
-                
+
                 if let Some(tx) = progress_tx {
                     let _ = tx.send(ScanProgress {
                         current_path: Some(artifact_path),
@@ -392,7 +477,7 @@ impl ParallelScanner {
             }
         }
     }
-    
+
     /// Get number of threads being used
     pub fn thread_count(&self) -> usize {
         self.scan_config.effective_threads()
@@ -444,7 +529,7 @@ mod tests {
         assert!(threads >= 2);
         assert!(threads <= num_cpus::get());
     }
-    
+
     #[test]
     fn effective_threads_manual() {
         let config = ParallelScanConfig {
@@ -453,16 +538,16 @@ mod tests {
         };
         assert_eq!(config.effective_threads(), 4);
     }
-    
+
     #[test]
     fn parallel_scan_finds_files() {
         let tmp = tempdir().unwrap();
         let paths = platform_paths(&tmp);
-        
+
         // Create test files
         fs::create_dir_all(&paths.cache_dir).unwrap();
         fs::write(paths.cache_dir.join("test.log"), "test").unwrap();
-        
+
         let config = CleanupConfig {
             scan_paths: vec!["${CACHE_DIR}".into()],
             rules: vec![Rule {
@@ -473,10 +558,10 @@ mod tests {
                 ..Default::default()
             }],
         };
-        
+
         let scanner = ParallelScanner::new(config, paths, ParallelScanConfig::default());
         let results = scanner.scan(None, SystemTime::now());
-        
+
         assert_eq!(results.len(), 1);
         assert!(results[0].path.ends_with("test.log"));
     }

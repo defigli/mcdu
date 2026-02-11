@@ -8,19 +8,19 @@
 //! - Platform-specific path resolution
 
 pub mod config;
-pub mod platform;
-pub mod rules;
-pub mod scanner;
-pub mod quarantine;
-pub mod parallel;
 pub mod executor;
 pub mod git;
+pub mod parallel;
+pub mod platform;
+pub mod quarantine;
+pub mod rules;
+pub mod scanner;
 
 // Re-exports for convenience
 pub use config::{CleanupConfig, CleanupState};
+pub use executor::{CleanupProgress, CleanupResult};
+pub use parallel::{parallel_scan, ParallelScanConfig, ParallelScanner};
 pub use platform::PlatformPaths;
-pub use rules::{Rule, Candidate, MatchType};
-pub use scanner::{scan, group_by_category, CategoryGroup, ScanProgress};
-pub use quarantine::{Quarantine, QuarantineSettings, QuarantineManifest, QuarantineError};
-pub use parallel::{ParallelScanner, ParallelScanConfig, parallel_scan};
-pub use executor::{CleanupResult, CleanupProgress};
+pub use quarantine::{Quarantine, QuarantineError, QuarantineManifest, QuarantineSettings};
+pub use rules::{Candidate, MatchType, Rule};
+pub use scanner::{group_by_category, scan, CategoryGroup, ScanProgress};

@@ -3,8 +3,8 @@ use glob::Pattern;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 use std::time::Duration;
+use std::time::SystemTime;
 
 /// Match type for rules - whether to match files, directories, or both
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -22,7 +22,7 @@ pub struct Rule {
     pub category: String,
     pub pattern: String,
     pub path: String,
-    
+
     #[serde(default)]
     pub signature: Option<String>,
     #[serde(default)]
@@ -33,35 +33,35 @@ pub struct Rule {
     pub risky: bool,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-    
+
     // NEW: Match type - file, directory, or both
     #[serde(default)]
     pub match_type: MatchType,
-    
+
     // NEW: Warning message for risky rules
     #[serde(default)]
     pub warning: Option<String>,
-    
+
     // NEW: Project marker - scan for this pattern in project directories
     #[serde(default)]
     pub project_marker: Option<String>,
-    
+
     // NEW: Dynamic path detection via shell command
     #[serde(default)]
     pub command: Option<String>,
-    
+
     // NEW: Cleanup command (alternative to deletion)
     #[serde(default)]
     pub cleanup_command: Option<String>,
-    
+
     // NEW: Maximum scan depth (None = unlimited)
     #[serde(default)]
     pub max_depth: Option<u32>,
-    
+
     // NEW: Exclude patterns (glob patterns to skip)
     #[serde(default)]
     pub exclude: Vec<String>,
-    
+
     // NEW: Description for UI display
     #[serde(default)]
     pub description: Option<String>,
@@ -116,16 +116,12 @@ impl Rule {
     pub fn base_path(&self, platform_paths: &PlatformPaths) -> Option<PathBuf> {
         platform_paths.resolve_path(&self.path)
     }
-    
+
     /// Get base path, potentially from a shell command
     pub fn resolve_base_path(&self, platform_paths: &PlatformPaths) -> Option<PathBuf> {
         // First try command if present
         if let Some(cmd) = &self.command {
-            if let Ok(output) = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(cmd)
-                .output()
-            {
+            if let Ok(output) = std::process::Command::new("sh").arg("-c").arg(cmd).output() {
                 if output.status.success() {
                     let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
                     if !path_str.is_empty() {
@@ -137,11 +133,11 @@ impl Rule {
                 }
             }
         }
-        
+
         // Fall back to template path
         self.base_path(platform_paths)
     }
-    
+
     /// Check if a path matches any exclude pattern
     fn is_excluded(&self, path: &Path) -> bool {
         for exclude_pattern in &self.exclude {
@@ -172,14 +168,22 @@ impl Rule {
         if !self.enabled {
             return false;
         }
-        
+
         // Check match type
         let is_dir = metadata.is_dir();
         let is_file = metadata.is_file();
         match self.match_type {
-            MatchType::File => if !is_file { return false; },
-            MatchType::Directory => if !is_dir { return false; },
-            MatchType::Both => {}, // Accept either
+            MatchType::File => {
+                if !is_file {
+                    return false;
+                }
+            }
+            MatchType::Directory => {
+                if !is_dir {
+                    return false;
+                }
+            }
+            MatchType::Both => {} // Accept either
         }
 
         let base_path = match self.base_path(platform_paths) {
@@ -198,11 +202,13 @@ impl Rule {
             Err(_) => return false,
         };
 
-        let relative = candidate_path.strip_prefix(&base_path).unwrap_or(candidate_path);
+        let relative = candidate_path
+            .strip_prefix(&base_path)
+            .unwrap_or(candidate_path);
         if !pattern.matches_path(relative) {
             return false;
         }
-        
+
         // Check excludes
         if self.is_excluded(candidate_path) {
             return false;
@@ -255,12 +261,12 @@ impl Candidate {
             warning: None,
         }
     }
-    
+
     pub fn with_directory(mut self, is_dir: bool) -> Self {
         self.is_directory = is_dir;
         self
     }
-    
+
     pub fn with_warning(mut self, warning: Option<String>) -> Self {
         self.warning = warning;
         self
@@ -348,7 +354,7 @@ mod tests {
 
         assert!(!rule.matches(&paths, &target_file, &metadata, now));
     }
-    
+
     #[test]
     fn matches_directory_type() {
         let tmp = tempdir().unwrap();
@@ -364,13 +370,13 @@ mod tests {
         let paths = platform_paths(&tmp);
         let target_dir = paths.cache_dir.join("project").join("target");
         std::fs::create_dir_all(&target_dir).unwrap();
-        
+
         let metadata = std::fs::metadata(&target_dir).unwrap();
         let now = SystemTime::now();
 
         assert!(rule.matches(&paths, &target_dir, &metadata, now));
     }
-    
+
     #[test]
     fn excludes_patterns() {
         let tmp = tempdir().unwrap();

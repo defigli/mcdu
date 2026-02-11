@@ -232,39 +232,48 @@ fn scan_project_marker_rule(
 ) {
     let max_depth = rule.max_depth.unwrap_or(6) as usize;
     let project_roots = find_project_roots(scan_paths, marker, max_depth);
-    
+
     // Extract the artifact name from the pattern (e.g., "**/target" -> "target")
-    let artifact_name = rule.pattern
+    let artifact_name = rule
+        .pattern
         .trim_start_matches("**/")
         .trim_start_matches("*/")
         .to_string();
-    
+
     for project_root in project_roots {
         let artifact_path = project_root.join(&artifact_name);
-        
+
         // Skip if already matched
         if matched_dirs.contains(&artifact_path) {
             continue;
         }
-        
+
         if !artifact_path.exists() {
             continue;
         }
-        
+
         let metadata = match std::fs::metadata(&artifact_path) {
             Ok(m) => m,
             Err(_) => continue,
         };
-        
+
         // Check match type
         let is_dir = metadata.is_dir();
         let is_file = metadata.is_file();
         match rule.match_type {
-            MatchType::File => if !is_file { continue; },
-            MatchType::Directory => if !is_dir { continue; },
-            MatchType::Both => {},
+            MatchType::File => {
+                if !is_file {
+                    continue;
+                }
+            }
+            MatchType::Directory => {
+                if !is_dir {
+                    continue;
+                }
+            }
+            MatchType::Both => {}
         }
-        
+
         // Check age if specified
         if let Some(min_age_hours) = rule.min_age_hours {
             if let Ok(modified) = metadata.modified() {
@@ -276,21 +285,21 @@ fn scan_project_marker_rule(
                 }
             }
         }
-        
+
         // Calculate size
         let size = if is_dir {
             dir_size(&artifact_path)
         } else {
             disk_usage(&metadata)
         };
-        
+
         // Check min size if specified
         if let Some(min_size) = rule.min_size_bytes {
             if size < min_size {
                 continue;
             }
         }
-        
+
         let last_accessed = metadata.accessed().ok();
         let is_active = metadata
             .modified()
@@ -298,7 +307,7 @@ fn scan_project_marker_rule(
             .and_then(|modified| now.duration_since(modified).ok())
             .map(|duration| duration < std::time::Duration::from_secs(48 * 3600))
             .unwrap_or(false);
-        
+
         let candidate = Candidate::new(
             artifact_path.clone(),
             rule.name.clone(),
@@ -310,13 +319,13 @@ fn scan_project_marker_rule(
         )
         .with_directory(is_dir)
         .with_warning(rule.warning.clone());
-        
+
         results.push(candidate);
         matched_dirs.insert(artifact_path.clone());
-        
+
         *found_count += 1;
         *total_size += size;
-        
+
         if let Some(tx) = progress_tx {
             let _ = tx.send(ScanProgress {
                 current_path: Some(artifact_path),
@@ -354,10 +363,13 @@ fn scan_path_with_rule(
         let path = entry.path();
 
         // Skip if inside an already-matched directory
-        if matched_dirs.iter().any(|d| path.starts_with(d) && path != d) {
+        if matched_dirs
+            .iter()
+            .any(|d| path.starts_with(d) && path != d)
+        {
             continue;
         }
-        
+
         let metadata = match entry.metadata() {
             Ok(m) => m,
             Err(_) => continue,
@@ -393,7 +405,7 @@ fn scan_path_with_rule(
         if !rule.matches(platform_paths, path, &metadata, now) {
             continue;
         }
-        
+
         // Skip if already matched
         let path_buf = path.to_path_buf();
         if matched_dirs.contains(&path_buf) {
@@ -428,7 +440,7 @@ fn scan_path_with_rule(
         .with_warning(rule.warning.clone());
 
         results.push(candidate);
-        
+
         // Track matched directories to avoid duplicates
         if is_dir {
             matched_dirs.insert(path_buf.clone());
@@ -538,7 +550,7 @@ mod tests {
             match_type: MatchType::Directory,
             ..Default::default()
         };
-        
+
         let config = CleanupConfig {
             scan_paths: vec!["${CACHE_DIR}".into()],
             rules: vec![rule],
@@ -548,10 +560,10 @@ mod tests {
         let target_dir = paths.cache_dir.join("project").join("target");
         fs::create_dir_all(&target_dir).unwrap();
         fs::write(target_dir.join("build.o"), "object file").unwrap();
-        
+
         let now = SystemTime::now();
         let results = scan(&config, &paths, None, now);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, target_dir);
         assert!(results[0].is_directory);
@@ -562,14 +574,14 @@ mod tests {
     fn scan_with_project_marker() {
         let tmp = tempdir().unwrap();
         let paths = platform_paths(&tmp);
-        
+
         // Create a Rust project with target directory
         let project_dir = paths.home_dir.join("myproject");
         let target_dir = project_dir.join("target");
         fs::create_dir_all(&target_dir).unwrap();
         fs::write(project_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(target_dir.join("debug.o"), "build artifact").unwrap();
-        
+
         let rule = Rule {
             name: "rust-target".into(),
             category: "Rust/Cargo".into(),
@@ -580,15 +592,15 @@ mod tests {
             max_depth: Some(5),
             ..Default::default()
         };
-        
+
         let config = CleanupConfig {
             scan_paths: vec!["${HOME}".into()],
             rules: vec![rule],
         };
-        
+
         let now = SystemTime::now();
         let results = scan(&config, &paths, None, now);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, target_dir);
         assert!(results[0].is_directory);
@@ -657,12 +669,12 @@ mod tests {
         cats.sort();
         assert_eq!(cats, vec!["cat-a", "cat-b"]);
     }
-    
+
     #[test]
     fn avoids_duplicate_matches() {
         let tmp = tempdir().unwrap();
         let paths = platform_paths(&tmp);
-        
+
         // Two rules that could match the same directory
         let rule1 = Rule {
             name: "target-1".into(),
@@ -680,7 +692,7 @@ mod tests {
             match_type: MatchType::Directory,
             ..Default::default()
         };
-        
+
         let config = CleanupConfig {
             scan_paths: vec!["${CACHE_DIR}".into()],
             rules: vec![rule1, rule2],
@@ -688,10 +700,10 @@ mod tests {
 
         let target_dir = paths.cache_dir.join("project").join("target");
         fs::create_dir_all(&target_dir).unwrap();
-        
+
         let now = SystemTime::now();
         let results = scan(&config, &paths, None, now);
-        
+
         // Should only match once, not twice
         assert_eq!(results.len(), 1);
     }

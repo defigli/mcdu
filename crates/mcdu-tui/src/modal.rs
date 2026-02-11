@@ -2,10 +2,23 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub enum ModalType {
-    ConfirmDelete { path: PathBuf, size: u64 },
-    FinalConfirm { path: PathBuf, size: u64 },
-    CleanupConfirm { items: usize, size: u64, dry_run: bool },
-    CleanupFinal { items: usize, size: u64 },
+    ConfirmDelete {
+        path: PathBuf,
+        size: u64,
+    },
+    FinalConfirm {
+        path: PathBuf,
+        size: u64,
+    },
+    CleanupConfirm {
+        items: usize,
+        size: u64,
+        dry_run: bool,
+    },
+    CleanupFinal {
+        items: usize,
+        size: u64,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -53,7 +66,11 @@ impl Modal {
 
     pub fn cleanup_confirm(items: usize, size: u64, dry_run: bool) -> Self {
         Modal {
-            modal_type: ModalType::CleanupConfirm { items, size, dry_run },
+            modal_type: ModalType::CleanupConfirm {
+                items,
+                size,
+                dry_run,
+            },
             selected_button: 1,
             buttons: vec![
                 ("Yes".to_string(), ModalAction::Confirm),
@@ -93,10 +110,18 @@ impl Modal {
                     format_size(*size)
                 )
             }
-            ModalType::CleanupConfirm { items, size, dry_run } => {
+            ModalType::CleanupConfirm {
+                items,
+                size,
+                dry_run,
+            } => {
                 format!(
                     "{} {} items ({})? ",
-                    if *dry_run { "Dry-run" } else { "Cleanup delete" },
+                    if *dry_run {
+                        "Dry-run"
+                    } else {
+                        "Cleanup delete"
+                    },
                     items,
                     format_size(*size)
                 )

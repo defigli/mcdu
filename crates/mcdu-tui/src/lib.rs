@@ -8,15 +8,15 @@
 //! - Cleanup view state
 
 pub mod app;
-pub mod ui;
-pub mod tree;
-pub mod modal;
-pub mod scan;
+pub mod cache;
 pub mod changes;
+pub mod cleanup_ui;
 pub mod delete;
 pub mod logger;
-pub mod cache;
-pub mod cleanup_ui;
+pub mod modal;
+pub mod scan;
+pub mod tree;
+pub mod ui;
 
 // Re-exports
 pub use app::{App, AppMode, DeleteProgress};

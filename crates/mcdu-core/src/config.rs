@@ -228,7 +228,8 @@ risky = false
                     min_age_hours: None,
                     min_size_bytes: None,
                     risky: false,
-                    enabled: true, ..Default::default()
+                    enabled: true,
+                    ..Default::default()
                 },
                 Rule {
                     name: "b".into(),
@@ -239,7 +240,8 @@ risky = false
                     min_age_hours: None,
                     min_size_bytes: None,
                     risky: false,
-                    enabled: true, ..Default::default()
+                    enabled: true,
+                    ..Default::default()
                 },
                 Rule {
                     name: "c".into(),
@@ -250,7 +252,8 @@ risky = false
                     min_age_hours: None,
                     min_size_bytes: None,
                     risky: false,
-                    enabled: true, ..Default::default()
+                    enabled: true,
+                    ..Default::default()
                 },
             ],
         };

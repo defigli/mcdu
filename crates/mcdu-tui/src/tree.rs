@@ -17,7 +17,10 @@ pub struct FileNode {
 
 /// Progress update during tree scanning
 pub enum ScanProgress {
-    Scanning { files_scanned: usize, current_path: String },
+    Scanning {
+        files_scanned: usize,
+        current_path: String,
+    },
     Complete(FileNode),
     Error(String),
 }
@@ -74,7 +77,10 @@ impl FileNode {
 }
 
 /// Scan entire directory tree and build in-memory structure
-pub fn scan_tree(root: &Path, progress_tx: Option<mpsc::Sender<ScanProgress>>) -> Result<FileNode, String> {
+pub fn scan_tree(
+    root: &Path,
+    progress_tx: Option<mpsc::Sender<ScanProgress>>,
+) -> Result<FileNode, String> {
     let root = root.canonicalize().map_err(|e| e.to_string())?;
 
     // Collect all entries with WalkDir
@@ -135,7 +141,10 @@ fn build_tree(root: &Path, entries: Vec<(PathBuf, u64, bool)>) -> FileNode {
     }
 
     // Recursively build the tree
-    fn build_node(path: &Path, children_map: &HashMap<PathBuf, Vec<(PathBuf, u64, bool)>>) -> FileNode {
+    fn build_node(
+        path: &Path,
+        children_map: &HashMap<PathBuf, Vec<(PathBuf, u64, bool)>>,
+    ) -> FileNode {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -156,7 +165,8 @@ fn build_tree(root: &Path, entries: Vec<(PathBuf, u64, bool)>) -> FileNode {
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_default();
-                    node.children.push(FileNode::new_file(child_name, child_path.clone(), *size));
+                    node.children
+                        .push(FileNode::new_file(child_name, child_path.clone(), *size));
                 }
             }
 

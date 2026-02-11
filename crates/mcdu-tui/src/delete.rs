@@ -1,8 +1,8 @@
+use crate::app::DeleteProgressUpdate;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use walkdir::WalkDir;
-use crate::app::DeleteProgressUpdate;
 
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
@@ -25,7 +25,7 @@ pub struct DeleteResult {
 }
 
 /// Delete a directory with optional progress updates sent to UI
-/// 
+///
 /// # Arguments
 /// * `path` - Path to delete
 /// * `progress_tx` - Optional channel to send progress updates to UI
@@ -74,7 +74,8 @@ pub fn delete_directory(
             bytes_total: total_size_bytes,
             files_done: 0,
             files_total: total_count + 1, // +1 for root directory
-            current_file: format!("Found {} files, {:.1} MB", 
+            current_file: format!(
+                "Found {} files, {:.1} MB",
                 total_count,
                 total_size_bytes as f64 / 1_048_576.0
             ),
@@ -111,12 +112,14 @@ pub fn delete_directory(
                     bytes_total: total_size_bytes,
                     files_done: files_deleted,
                     files_total: total_count + 1,
-                    current_file: entry.path.file_name()
+                    current_file: entry
+                        .path
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("<unknown>")
                         .to_string(),
                 }) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(_) => {
                         // Channel disconnected, UI is gone - abort early
                         break;
