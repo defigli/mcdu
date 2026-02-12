@@ -64,6 +64,21 @@ jobs:
         if: startsWith(matrix.os, 'linux') && !matrix.cross
         run: strip target/${{ matrix.target }}/release/mcdu
 
+      - name: Import code signing certificate
+        if: startsWith(matrix.os, 'macos')
+        uses: apple-actions/import-codesign-certs@v2
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+
+      - name: Sign binary (macOS)
+        if: startsWith(matrix.os, 'macos')
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+        run: |
+          codesign --force --options runtime --sign "$CODESIGN_IDENTITY" target/${{ matrix.target }}/release/mcdu
+          codesign --verify --verbose target/${{ matrix.target }}/release/mcdu
+
       - name: Create tarball
         run: |
           cd target/${{ matrix.target }}/release
