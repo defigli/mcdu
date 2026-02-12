@@ -14,6 +14,12 @@ pub struct SizeCache {
     cache: Arc<Mutex<HashMap<PathBuf, CachedSize>>>,
 }
 
+impl Default for SizeCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SizeCache {
     pub fn new() -> Self {
         SizeCache {

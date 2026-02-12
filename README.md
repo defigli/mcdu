@@ -14,6 +14,27 @@ A fast, modern disk usage analyzer with an integrated developer cleanup tool, wr
 
 ## Installation
 
+### Prebuilt Binaries (Recommended)
+
+Download statically-linked binaries for Linux from GitHub releases:
+
+```bash
+# Linux x86_64 (static, works everywhere)
+wget https://github.com/mikalv/mcdu/releases/latest/download/mcdu-linux-x86_64-musl.tar.gz
+tar xzf mcdu-linux-x86_64-musl.tar.gz
+sudo mv mcdu /usr/local/bin/
+
+# Linux aarch64 (static, ARM servers)
+wget https://github.com/mikalv/mcdu/releases/latest/download/mcdu-linux-aarch64-musl.tar.gz
+tar xzf mcdu-linux-aarch64-musl.tar.gz
+sudo mv mcdu /usr/local/bin/
+
+# Verify checksum (shown in release notes)
+sha256sum mcdu-linux-x86_64-musl.tar.gz
+```
+
+### Cargo
+
 ```bash
 cargo install mcdu
 ```

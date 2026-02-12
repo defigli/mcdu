@@ -15,6 +15,17 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 
+/// Context shared between scan operations
+struct ScanContext<'a> {
+    scan_paths: &'a [PathBuf],
+    now: SystemTime,
+    found_count: &'a AtomicU64,
+    total_size: &'a AtomicU64,
+    matched_dirs: &'a Arc<Mutex<HashSet<PathBuf>>>,
+    results: &'a mut Vec<Candidate>,
+    progress_tx: Option<&'a mpsc::Sender<ScanProgress>>,
+}
+
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 
@@ -153,18 +164,18 @@ impl ParallelScanner {
                     }
 
                     let mut category_candidates = Vec::new();
+                    let mut ctx = ScanContext {
+                        scan_paths: &scan_paths,
+                        now,
+                        found_count: &found_count,
+                        total_size: &total_size,
+                        matched_dirs: &matched_dirs,
+                        results: &mut category_candidates,
+                        progress_tx: progress_tx.as_ref(),
+                    };
 
                     for rule in category_rules {
-                        self.scan_rule(
-                            rule,
-                            &scan_paths,
-                            now,
-                            &found_count,
-                            &total_size,
-                            &matched_dirs,
-                            &mut category_candidates,
-                            progress_tx.as_ref(),
-                        );
+                        self.scan_rule(rule, &mut ctx);
                     }
 
                     category_candidates
@@ -178,30 +189,10 @@ impl ParallelScanner {
         all
     }
 
-    fn scan_rule(
-        &self,
-        rule: &Rule,
-        scan_paths: &[PathBuf],
-        now: SystemTime,
-        found_count: &AtomicU64,
-        total_size: &AtomicU64,
-        matched_dirs: &Arc<Mutex<HashSet<PathBuf>>>,
-        results: &mut Vec<Candidate>,
-        progress_tx: Option<&mpsc::Sender<ScanProgress>>,
-    ) {
+    fn scan_rule(&self, rule: &Rule, ctx: &mut ScanContext) {
         // Handle project_marker rules
         if let Some(ref marker) = rule.project_marker {
-            self.scan_project_marker(
-                rule,
-                marker,
-                scan_paths,
-                now,
-                found_count,
-                total_size,
-                matched_dirs,
-                results,
-                progress_tx,
-            );
+            self.scan_project_marker(rule, marker, ctx);
             return;
         }
 
@@ -232,7 +223,7 @@ impl ParallelScanner {
 
             // Check already matched
             {
-                let dirs = matched_dirs.lock().unwrap();
+                let dirs = ctx.matched_dirs.lock().unwrap();
                 if dirs.iter().any(|d| path.starts_with(d) && path != d) {
                     continue;
                 }
@@ -259,13 +250,13 @@ impl ParallelScanner {
                 }
             }
 
-            if !rule.matches(&self.platform_paths, path, &metadata, now) {
+            if !rule.matches(&self.platform_paths, path, &metadata, ctx.now) {
                 continue;
             }
 
             let path_buf = path.to_path_buf();
             {
-                let dirs = matched_dirs.lock().unwrap();
+                let dirs = ctx.matched_dirs.lock().unwrap();
                 if dirs.contains(&path_buf) {
                     continue;
                 }
@@ -279,7 +270,7 @@ impl ParallelScanner {
             let is_active = metadata
                 .modified()
                 .ok()
-                .and_then(|m| now.duration_since(m).ok())
+                .and_then(|m| ctx.now.duration_since(m).ok())
                 .map(|d| d < std::time::Duration::from_secs(48 * 3600))
                 .unwrap_or(false);
 
@@ -295,38 +286,27 @@ impl ParallelScanner {
             .with_directory(is_dir)
             .with_warning(rule.warning.clone());
 
-            results.push(candidate);
+            ctx.results.push(candidate);
 
             if is_dir {
-                matched_dirs.lock().unwrap().insert(path_buf.clone());
+                ctx.matched_dirs.lock().unwrap().insert(path_buf.clone());
             }
 
-            found_count.fetch_add(1, Ordering::Relaxed);
-            total_size.fetch_add(size, Ordering::Relaxed);
+            ctx.found_count.fetch_add(1, Ordering::Relaxed);
+            ctx.total_size.fetch_add(size, Ordering::Relaxed);
 
-            if let Some(tx) = progress_tx {
+            if let Some(tx) = ctx.progress_tx {
                 let _ = tx.send(ScanProgress {
                     current_path: Some(path_buf),
-                    found_count: found_count.load(Ordering::Relaxed),
-                    total_size: total_size.load(Ordering::Relaxed),
+                    found_count: ctx.found_count.load(Ordering::Relaxed),
+                    total_size: ctx.total_size.load(Ordering::Relaxed),
                     current_category: Some(rule.category.clone()),
                 });
             }
         }
     }
 
-    fn scan_project_marker(
-        &self,
-        rule: &Rule,
-        marker: &str,
-        scan_paths: &[PathBuf],
-        now: SystemTime,
-        found_count: &AtomicU64,
-        total_size: &AtomicU64,
-        matched_dirs: &Arc<Mutex<HashSet<PathBuf>>>,
-        results: &mut Vec<Candidate>,
-        progress_tx: Option<&mpsc::Sender<ScanProgress>>,
-    ) {
+    fn scan_project_marker(&self, rule: &Rule, marker: &str, ctx: &mut ScanContext) {
         let max_depth = rule.max_depth.unwrap_or(6) as usize;
         let artifact_name = rule
             .pattern
@@ -334,7 +314,7 @@ impl ParallelScanner {
             .trim_start_matches("*/");
         let is_glob = marker.contains('*');
 
-        for scan_path in scan_paths {
+        for scan_path in ctx.scan_paths {
             if !scan_path.exists() {
                 continue;
             }
@@ -386,7 +366,7 @@ impl ParallelScanner {
                 let artifact_path = path.join(artifact_name);
 
                 {
-                    let dirs = matched_dirs.lock().unwrap();
+                    let dirs = ctx.matched_dirs.lock().unwrap();
                     if dirs.contains(&artifact_path) {
                         continue;
                     }
@@ -419,7 +399,8 @@ impl ParallelScanner {
                 if let Some(min_age) = rule.min_age_hours {
                     if let Ok(modified) = metadata.modified() {
                         let age = std::time::Duration::from_secs(min_age * 3600);
-                        if now
+                        if ctx
+                            .now
                             .duration_since(modified)
                             .map(|d| d < age)
                             .unwrap_or(true)
@@ -444,7 +425,7 @@ impl ParallelScanner {
                 let is_active = metadata
                     .modified()
                     .ok()
-                    .and_then(|m| now.duration_since(m).ok())
+                    .and_then(|m| ctx.now.duration_since(m).ok())
                     .map(|d| d < std::time::Duration::from_secs(48 * 3600))
                     .unwrap_or(false);
 
@@ -460,17 +441,20 @@ impl ParallelScanner {
                 .with_directory(is_dir)
                 .with_warning(rule.warning.clone());
 
-                results.push(candidate);
-                matched_dirs.lock().unwrap().insert(artifact_path.clone());
+                ctx.results.push(candidate);
+                ctx.matched_dirs
+                    .lock()
+                    .unwrap()
+                    .insert(artifact_path.clone());
 
-                found_count.fetch_add(1, Ordering::Relaxed);
-                total_size.fetch_add(size, Ordering::Relaxed);
+                ctx.found_count.fetch_add(1, Ordering::Relaxed);
+                ctx.total_size.fetch_add(size, Ordering::Relaxed);
 
-                if let Some(tx) = progress_tx {
+                if let Some(tx) = ctx.progress_tx {
                     let _ = tx.send(ScanProgress {
                         current_path: Some(artifact_path),
-                        found_count: found_count.load(Ordering::Relaxed),
-                        total_size: total_size.load(Ordering::Relaxed),
+                        found_count: ctx.found_count.load(Ordering::Relaxed),
+                        total_size: ctx.total_size.load(Ordering::Relaxed),
                         current_category: Some(rule.category.clone()),
                     });
                 }

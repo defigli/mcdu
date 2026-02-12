@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build for ${{ matrix.os }}
+    name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -18,22 +18,19 @@ jobs:
           - os: linux-x86_64-musl
             runner: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            static: true
           - os: linux-aarch64-musl
             runner: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            static: true
+            cross: true
           - os: linux-x86_64-gnu
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: macos-x86_64
             runner: macos-latest
             target: x86_64-apple-darwin
-            sign: true
           - os: macos-aarch64
-            runner: macos-14  # ARM runner
+            runner: macos-14
             target: aarch64-apple-darwin
-            sign: true
 
     steps:
       - uses: actions/checkout@v4
@@ -42,34 +39,29 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          components: rustfmt, clippy
 
-      - name: Cache cargo registry
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
 
+      - name: Install musl-tools (x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install cross (aarch64-musl)
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
       - name: Build release binary
+        if: "!matrix.cross"
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Import Apple code signing certificate
-        if: matrix.sign
-        uses: apple-actions/import-codesign-certs@v2
-        with:
-          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
-          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      - name: Build release binary (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
 
-      - name: Sign binary (macOS)
-        if: matrix.sign
-        env:
-          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
-        run: |
-          BINARY_PATH=target/${{ matrix.target }}/release/mcdu
-          codesign --force --deep --sign "$CODESIGN_IDENTITY" "$BINARY_PATH"
-          codesign --verify --verbose "$BINARY_PATH"
-
-      - name: Strip binary (Linux)
-        if: startsWith(matrix.os, 'linux')
+      - name: Strip binary (native Linux)
+        if: startsWith(matrix.os, 'linux') && !matrix.cross
         run: strip target/${{ matrix.target }}/release/mcdu
 
       - name: Create tarball
@@ -95,53 +87,23 @@ jobs:
         with:
           path: artifacts
 
-      - name: Calculate and display checksums
-        id: checksums
+      - name: Calculate checksums
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          LINUX_MUSL_X86_SHA=$(sha256sum artifacts/mcdu-linux-x86_64-musl/mcdu-linux-x86_64-musl.tar.gz | cut -d' ' -f1)
-          LINUX_MUSL_ARM_SHA=$(sha256sum artifacts/mcdu-linux-aarch64-musl/mcdu-linux-aarch64-musl.tar.gz | cut -d' ' -f1)
-          LINUX_GNU_X86_SHA=$(sha256sum artifacts/mcdu-linux-x86_64-gnu/mcdu-linux-x86_64-gnu.tar.gz | cut -d' ' -f1)
-          MACOS_X86_SHA=$(sha256sum artifacts/macos-x86_64/mcdu-macos-x86_64.tar.gz | cut -d' ' -f1)
-          MACOS_ARM_SHA=$(sha256sum artifacts/macos-aarch64/mcdu-macos-aarch64.tar.gz | cut -d' ' -f1)
-
-          echo "## Binary Checksums for $VERSION" >> release-notes.md
-          echo "" >> release-notes.md
-          echo "### Linux (Static - works everywhere)" >> release-notes.md
-          echo "**x86_64:** \`$LINUX_MUSL_X86_SHA\`" >> release-notes.md
-          echo "**aarch64:** \`$LINUX_MUSL_ARM_SHA\`" >> release-notes.md
-          echo "" >> release-notes.md
-          echo "### Linux (GNU)" >> release-notes.md
-          echo "**x86_64:** \`$LINUX_GNU_X86_SHA\`" >> release-notes.md
-          echo "" >> release-notes.md
-          echo "### macOS" >> release-notes.md
-          echo "**x86_64:** \`$MACOS_X86_SHA\`" >> release-notes.md
-          echo "**aarch64:** \`$MACOS_ARM_SHA\`" >> release-notes.md
-          echo "" >> release-notes.md
-
-      - name: Generate release notes
-        id: notes
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-
-          # Extract version-specific notes from CHANGELOG
-          awk -v version="$VERSION" '
-            /^\\[/ { in_section=0; if ($0 == "[" version "]") { in_section=1; next } }
-            in_section && /^\\[/ { exit }
-            in_section { print }
-          ' CHANGELOG.md > release-notes.txt
-
-          # Create notes with header
-          echo "## What's Changed" > release-notes.md
-          cat release-notes.txt >> release-notes.md
+          echo "## Checksums" > checksums.md
+          echo "" >> checksums.md
+          echo '```' >> checksums.md
+          for f in artifacts/mcdu-*/mcdu-*.tar.gz; do
+            sha256sum "$f" | sed 's|artifacts/mcdu-[^/]*/||' >> checksums.md
+          done
+          echo '```' >> checksums.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: release-notes.md
+          body_path: checksums.md
           draft: false
           prerelease: false
           files: artifacts/mcdu-*/mcdu-*.tar.gz
-          generate_release_notes: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

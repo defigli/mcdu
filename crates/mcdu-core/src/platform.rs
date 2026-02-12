@@ -103,9 +103,13 @@ pub fn get_disk_space(path: &Path) -> Option<DiskSpace> {
             // f_frsize is the fundamental filesystem block size (usually 4KB)
             // f_bsize is the preferred I/O block size (can be 1MB on APFS, giving wrong results!)
             let fragment_size = stat.fragment_size();
+            // These casts are needed on macOS (returns i64) but are no-ops on Linux (u64)
+            #[allow(clippy::unnecessary_cast)]
             let total_blocks = stat.blocks() as u64;
-            let free_blocks = stat.blocks_free() as u64; // Total free (includes reserved)
-            let available_blocks = stat.blocks_available() as u64; // Available to user
+            #[allow(clippy::unnecessary_cast)]
+            let free_blocks = stat.blocks_free() as u64;
+            #[allow(clippy::unnecessary_cast)]
+            let available_blocks = stat.blocks_available() as u64;
 
             let total_bytes = total_blocks * fragment_size;
             let free_bytes = free_blocks * fragment_size;

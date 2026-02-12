@@ -283,7 +283,7 @@ impl Quarantine {
             }
 
             // Move back
-            if let Err(_) = fs::rename(&source, dest) {
+            if fs::rename(&source, dest).is_err() {
                 if source.is_dir() {
                     copy_dir_all(&source, dest)?;
                     fs::remove_dir_all(&source)?;

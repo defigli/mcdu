@@ -23,6 +23,12 @@ pub struct SizeChange {
     pub delta_percent: f32,
 }
 
+impl Default for DirectoryFingerprint {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DirectoryFingerprint {
     pub fn new() -> Self {
         DirectoryFingerprint {

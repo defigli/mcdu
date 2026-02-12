@@ -98,6 +98,12 @@ pub struct DisplayEntry {
     pub is_dir: bool,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));

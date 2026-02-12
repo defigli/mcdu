@@ -88,26 +88,6 @@ fn validate_start_path(path: Option<PathBuf>) -> Result<Option<PathBuf>, Box<dyn
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn validate_start_path_accepts_existing_dir() {
-        let tmp = tempdir().unwrap();
-        let result = validate_start_path(Some(tmp.path().to_path_buf()));
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validate_start_path_rejects_missing() {
-        let missing = PathBuf::from("/path/does/not/exist");
-        let result = validate_start_path(Some(missing));
-        assert!(result.is_err());
-    }
-}
-
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), Box<dyn Error>> {
     loop {
         terminal.draw(|f| {
@@ -329,4 +309,24 @@ fn handle_modal_action(app: &mut App, action: modal::ModalAction) -> Result<bool
     }
 
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn validate_start_path_accepts_existing_dir() {
+        let tmp = tempdir().unwrap();
+        let result = validate_start_path(Some(tmp.path().to_path_buf()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_start_path_rejects_missing() {
+        let missing = PathBuf::from("/path/does/not/exist");
+        let result = validate_start_path(Some(missing));
+        assert!(result.is_err());
+    }
 }
