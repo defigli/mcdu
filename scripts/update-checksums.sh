@@ -30,10 +30,7 @@ rm -f "$TEMP_FILE"
 echo "SHA256: $SHA256"
 echo ""
 
-# Update Homebrew formula
-sed -i.bak "s/# sha256 \".*\"/sha256 \"$SHA256\"/" "$ROOT_DIR/packaging/homebrew/mcdu.rb"
-rm -f "$ROOT_DIR/packaging/homebrew/mcdu.rb.bak"
-echo "  ✓ packaging/homebrew/mcdu.rb"
+# Homebrew tap is auto-updated by the release workflow (mikalv/homebrew-mcdu)
 
 # Update AUR PKGBUILD
 sed -i.bak "s/sha256sums=('.*')/sha256sums=('$SHA256')/" "$ROOT_DIR/packaging/aur/PKGBUILD"

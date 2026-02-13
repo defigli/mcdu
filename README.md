@@ -8,30 +8,45 @@ A fast, modern disk usage analyzer with an integrated developer cleanup tool, wr
 
 - **Disk usage browser** - Navigate your filesystem with vim-style keybindings, color-coded by size
 - **Developer cleanup** - Scan for build artifacts, caches, and reclaimable space across 18+ ecosystems
+- **Orphaned app data** (macOS) - Detect leftover data from uninstalled applications in ~/Library
 - **Safe deletion** - Double-confirmation dialogs, dry-run mode, and JSON audit logging
 - **Fast scanning** - Background async scanning with live progress, jwalk parallelism for cleanup
 - **Cross-platform** - macOS (APFS) and Linux (ext4, btrfs, xfs)
 
 ## Installation
 
-### Prebuilt Binaries (Recommended)
-
-Download statically-linked binaries for Linux from GitHub releases:
+### Homebrew (macOS and Linux)
 
 ```bash
-# Linux x86_64 (static, works everywhere)
+brew install mikalv/mcdu/mcdu
+```
+
+### AUR (Arch Linux)
+
+```bash
+yay -S mcdu
+```
+
+### Prebuilt Binaries
+
+Download signed/static binaries from [GitHub Releases](https://github.com/mikalv/mcdu/releases/latest):
+
+| Platform | Architecture | File |
+|----------|-------------|------|
+| Linux | x86_64 (static musl) | `mcdu-linux-x86_64-musl.tar.gz` |
+| Linux | aarch64 (static musl) | `mcdu-linux-aarch64-musl.tar.gz` |
+| Linux | x86_64 (glibc) | `mcdu-linux-x86_64-gnu.tar.gz` |
+| macOS | Apple Silicon | `mcdu-macos-aarch64.tar.gz` |
+| macOS | Intel | `mcdu-macos-x86_64.tar.gz` |
+
+```bash
+# Example: Linux x86_64
 wget https://github.com/mikalv/mcdu/releases/latest/download/mcdu-linux-x86_64-musl.tar.gz
 tar xzf mcdu-linux-x86_64-musl.tar.gz
 sudo mv mcdu /usr/local/bin/
-
-# Linux aarch64 (static, ARM servers)
-wget https://github.com/mikalv/mcdu/releases/latest/download/mcdu-linux-aarch64-musl.tar.gz
-tar xzf mcdu-linux-aarch64-musl.tar.gz
-sudo mv mcdu /usr/local/bin/
-
-# Verify checksum (shown in release notes)
-sha256sum mcdu-linux-x86_64-musl.tar.gz
 ```
+
+macOS binaries are code-signed. Checksums are listed in each release's notes.
 
 ### Cargo
 
@@ -39,7 +54,7 @@ sha256sum mcdu-linux-x86_64-musl.tar.gz
 cargo install mcdu
 ```
 
-### From source
+### From Source
 
 ```bash
 git clone https://github.com/mikalv/mcdu.git
@@ -101,6 +116,14 @@ Scans for build artifacts, caches, and other reclaimable disk space across your 
 
 **Default scan paths:** `~/Downloads`, `~/Projects`, `~/Code`, `~/Developer`, `~/repos`, `~/dev`, `~/src`, `~/workspace`
 
+### Orphaned App Data (macOS)
+
+```bash
+mcdu orphans              # scan for leftover data from uninstalled apps
+```
+
+Detects data in ~/Library (Caches, Application Support, Containers, Preferences, etc.) belonging to applications that are no longer installed. Items are shown unchecked by default for safe manual review.
+
 ### Custom Configuration
 
 Place a config file at `~/.config/mcdu/cleanup.toml`:
@@ -123,6 +146,7 @@ Rules from the config are merged with built-in defaults.
 ```
 crates/
   mcdu-core/     # Scanner, cleanup rules, config, platform detection
+  mcdu-macos/    # macOS-specific: orphaned app data detection (cfg-gated)
   mcdu-tui/      # Ratatui app state, UI rendering, keybindings
   mcdu/          # CLI binary (clap), entry point
 ```

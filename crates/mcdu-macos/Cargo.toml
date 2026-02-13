@@ -1,0 +1,18 @@
+[package]
+name = "mcdu-macos"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "macOS-specific features for mcdu - orphaned app data detection"
+keywords = ["macos", "cleanup", "orphan", "bundle"]
+categories = ["filesystem", "os::macos-apis"]
+
+[dependencies]
+mcdu-core.workspace = true
+dirs.workspace = true
+walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

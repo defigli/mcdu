@@ -668,6 +668,7 @@ dependencies = [
  "crossterm 0.29.0",
  "dirs",
  "mcdu-core",
+ "mcdu-macos",
  "mcdu-tui",
  "ratatui",
  "tempfile",
@@ -693,6 +694,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcdu-macos"
+version = "0.5.0"
+dependencies = [
+ "dirs",
+ "mcdu-core",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
 name = "mcdu-tui"
 version = "0.5.0"
 dependencies = [
@@ -700,6 +711,7 @@ dependencies = [
  "crossterm 0.29.0",
  "dirs",
  "mcdu-core",
+ "mcdu-macos",
  "ratatui",
  "serde",
  "serde_json",

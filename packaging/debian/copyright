@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: mcdu
-Upstream-Contact: Mikal Villa <m@meeh.dev>
+Upstream-Contact: Mikal Villa <spam@mux.rs>
 Source: https://github.com/mikalv/mcdu
 
 Files: *
-Copyright: 2025 Mikal Villa <m@meeh.dev>
+Copyright: 2025-2026 Mikal Villa <spam@mux.rs>
 License: MIT
 
 License: MIT

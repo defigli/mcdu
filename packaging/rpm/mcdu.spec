@@ -1,7 +1,7 @@
 Name:           mcdu
-Version:        0.3.5
+Version:        0.5.0
 Release:        1%{?dist}
-Summary:        Modern disk usage analyzer with terminal UI
+Summary:        Modern disk usage analyzer with TUI and developer cleanup tools
 
 License:        MIT
 URL:            https://github.com/mikalv/mcdu
@@ -12,21 +12,24 @@ BuildRequires:  cargo
 BuildRequires:  gcc
 
 %description
-mcdu is a modern disk usage analyzer inspired by ncdu.
-It provides a fast, interactive terminal interface for
-exploring disk usage and safely deleting files.
+mcdu is a fast, modern disk usage analyzer with an integrated developer
+cleanup tool. Think ncdu meets CCleaner for developers.
 
 Features:
-- Fast directory scanning with progress display
-- Instant navigation (full tree in memory)
-- Safe file deletion with confirmation
-- Size change detection between scans
+- Disk usage browser with vim-style navigation
+- Developer cleanup scanning 18+ ecosystems
+- Safe deletion with confirmation and audit logging
+- Background async scanning with live progress
+- Cross-platform: macOS and Linux
 
 %prep
 %autosetup -n %{name}-%{version}
 
 %build
 cargo build --release --locked
+
+%check
+cargo test --release --locked
 
 %install
 install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
@@ -36,5 +39,9 @@ install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/%{name}
 
 %changelog
-* Wed Jan 01 2025 Mikal Villa <m@meeh.dev> - 0.3.5-1
+* Wed Feb 12 2026 Mikal Villa <spam@mux.rs> - 0.5.0-1
+- Developer cleanup mode with 18+ ecosystem support
+- Quarantine system, background scanning, custom rules
+
+* Wed Jan 01 2025 Mikal Villa <spam@mux.rs> - 0.3.5-1
 - Initial package

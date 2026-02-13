@@ -21,5 +21,8 @@ crossterm.workspace = true
 dirs.workspace = true
 ratatui.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+mcdu-macos.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true

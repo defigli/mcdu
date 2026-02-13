@@ -24,6 +24,8 @@ struct Cli {
 enum Commands {
     /// Developer cleanup utilities
     Cleanup(CleanupCommand),
+    /// Detect orphaned macOS app data (macOS only)
+    Orphans(OrphansCommand),
 }
 
 #[derive(Parser)]
@@ -33,13 +35,25 @@ pub struct CleanupCommand {
     path: Option<PathBuf>,
 }
 
+#[derive(Parser)]
+pub struct OrphansCommand {}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
+    let orphan_mode = matches!(cli.command, Some(Commands::Orphans(_)));
     let (cleanup_mode, start_path) = match cli.command {
         Some(Commands::Cleanup(ref cmd)) => (true, validate_start_path(cmd.path.clone())?),
+        Some(Commands::Orphans(_)) => (false, None),
         _ => (false, validate_start_path(cli.path)?),
     };
+
+    // Orphans subcommand is macOS-only
+    #[cfg(not(target_os = "macos"))]
+    if orphan_mode {
+        eprintln!("The 'orphans' subcommand is only available on macOS");
+        std::process::exit(1);
+    }
 
     // Setup terminal
     enable_raw_mode()?;
@@ -50,14 +64,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     terminal.hide_cursor()?;
 
     // Run app
-    let app = match (&start_path, cleanup_mode) {
-        (_, true) => {
+    let app = match (orphan_mode, &start_path, cleanup_mode) {
+        #[cfg(target_os = "macos")]
+        (true, _, _) => {
+            let mut a = App::new();
+            let _ = a.start_orphan_scan();
+            a
+        }
+        (_, _, true) => {
             let mut a = App::new();
             let _ = a.start_cleanup_scan_with_path(start_path);
             a
         }
-        (Some(path), false) => App::new_with_root(path.clone()),
-        (None, false) => App::new(),
+        (_, Some(path), false) => App::new_with_root(path.clone()),
+        (_, None, false) => App::new(),
     };
 
     let result = run_app(&mut terminal, app);

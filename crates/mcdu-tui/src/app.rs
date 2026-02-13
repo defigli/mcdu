@@ -526,12 +526,44 @@ impl App {
         let config_clone = config.clone();
         let platform_clone = platform_paths.clone();
         let handle = thread::spawn(move || {
-            cleanup::scanner::scan(
+            let mut results = cleanup::scanner::scan(
                 &config_clone,
                 &platform_clone,
                 Some(tx),
                 std::time::SystemTime::now(),
-            )
+            );
+
+            // Append orphaned app data on macOS
+            #[cfg(target_os = "macos")]
+            {
+                let orphans =
+                    mcdu_macos::scan_orphans(&platform_clone.home_dir, None);
+                results.extend(orphans);
+            }
+
+            results
+        });
+
+        self.cleanup_scan_thread = Some(handle);
+        self.cleanup_scan_rx = Some(rx);
+        self.cleanup_scanning = true;
+        self.mode = AppMode::Cleanup;
+        Ok(())
+    }
+
+    /// Start a scan that only finds orphaned macOS app data (no rule-based scan)
+    #[cfg(target_os = "macos")]
+    pub fn start_orphan_scan(&mut self) -> Result<(), String> {
+        let platform_paths = cleanup::platform::PlatformPaths::detect()
+            .ok_or_else(|| "Unable to detect platform paths".to_string())?;
+
+        self.cleanup_selected = HashSet::new();
+        self.cleanup_selected_index = 0;
+
+        let (tx, rx) = mpsc::channel();
+        let home = platform_paths.home_dir.clone();
+        let handle = thread::spawn(move || {
+            mcdu_macos::scan_orphans(&home, Some(&tx))
         });
 
         self.cleanup_scan_thread = Some(handle);
@@ -597,7 +629,13 @@ impl App {
         self.cleanup_selected
             .retain(|p| candidate_paths.contains(p));
         if self.cleanup_selected.is_empty() {
-            self.cleanup_selected = candidate_paths;
+            // Only auto-select candidates that opt in (e.g., orphans are unchecked by default)
+            self.cleanup_selected = self
+                .cleanup_candidates
+                .iter()
+                .filter(|c| c.default_selected)
+                .map(|c| c.path.clone())
+                .collect();
         }
 
         let platform_paths = match cleanup::platform::PlatformPaths::detect() {

@@ -1,5 +1,15 @@
+mcdu (0.5.0-1) unstable; urgency=medium
+
+  * Developer cleanup mode with 18+ ecosystem support
+  * Quarantine system for safe deletion
+  * Background async scanning with progress
+  * Custom cleanup rules via TOML config
+  * Pre-built binaries for Linux and macOS
+
+ -- Mikal Villa <spam@mux.rs>  Wed, 12 Feb 2026 00:00:00 +0000
+
 mcdu (0.3.5-1) unstable; urgency=medium
 
   * Initial release
 
- -- Mikal Villa <m@meeh.dev>  Wed, 01 Jan 2025 00:00:00 +0000
+ -- Mikal Villa <spam@mux.rs>  Wed, 01 Jan 2025 00:00:00 +0000

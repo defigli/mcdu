@@ -106,6 +106,7 @@ pub struct Candidate {
     pub is_active: bool,
     pub is_directory: bool,
     pub warning: Option<String>,
+    pub default_selected: bool,
 }
 
 impl Rule {
@@ -259,6 +260,7 @@ impl Candidate {
             is_active,
             is_directory: false,
             warning: None,
+            default_selected: true,
         }
     }
 
@@ -269,6 +271,11 @@ impl Candidate {
 
     pub fn with_warning(mut self, warning: Option<String>) -> Self {
         self.warning = warning;
+        self
+    }
+
+    pub fn with_default_selected(mut self, selected: bool) -> Self {
+        self.default_selected = selected;
         self
     }
 }
