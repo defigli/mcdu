@@ -69,10 +69,16 @@ mod tests {
 
     #[test]
     fn runs_git_gc_on_repo() {
+        // Skip if git is not available (e.g. NixOS sandboxed builds)
+        if Command::new("git").arg("--version").status().is_err() {
+            eprintln!("skipping test: git not found in PATH");
+            return;
+        }
+
         let tmp = tempdir().unwrap();
         let repo_path = tmp.path().join("repo");
         std::fs::create_dir_all(&repo_path).unwrap();
-        // initialize repository
+
         let status = Command::new("git")
             .arg("-C")
             .arg(&repo_path)
