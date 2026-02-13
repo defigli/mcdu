@@ -9,6 +9,10 @@ description.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = ["splash"]
+splash = ["mcdu-tui/splash"]
+
 [[bin]]
 name = "mcdu"
 path = "src/main.rs"

@@ -113,6 +113,86 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  package-and-publish:
+    name: Build & Publish DEB/RPM to pkg42
+    needs: release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - artifact: mcdu-linux-x86_64-gnu
+            nfpm_arch: amd64
+            rpm_arch: x86_64
+          - artifact: mcdu-linux-aarch64-musl
+            nfpm_arch: arm64
+            rpm_arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: pkg-work
+
+      - name: Extract binary
+        run: |
+          cd pkg-work
+          tar xzf mcdu-*.tar.gz
+          chmod +x mcdu
+
+      - name: Install nfpm
+        run: |
+          curl -sfL https://github.com/goreleaser/nfpm/releases/latest/download/nfpm_linux_amd64.tar.gz | tar xz -C /usr/local/bin nfpm
+
+      - name: Build DEB package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NFPM_ARCH: ${{ matrix.nfpm_arch }}
+        run: |
+          cd pkg-work
+          nfpm package -f ../packaging/nfpm.yaml -p deb
+          ls -la *.deb
+
+      - name: Build RPM package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NFPM_ARCH: ${{ matrix.nfpm_arch }}
+        run: |
+          cd pkg-work
+          nfpm package -f ../packaging/nfpm.yaml -p rpm
+          ls -la *.rpm
+
+      - name: Upload DEB to pkg42
+        env:
+          PKG42_TOKEN: ${{ secrets.PKG42_TOKEN }}
+          NFPM_ARCH: ${{ matrix.nfpm_arch }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          DEB_FILE=$(ls pkg-work/*.deb)
+          DEB_NAME=$(basename "$DEB_FILE")
+          curl -f -X POST \
+            -H "Authorization: Bearer ${PKG42_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@${DEB_FILE}" \
+            "https://pkg42.dev/deb/stable/main/${NFPM_ARCH}/upload?file=${DEB_NAME}&meta[Package]=mcdu&meta[Version]=${VERSION}"
+
+      - name: Upload RPM to pkg42
+        env:
+          PKG42_TOKEN: ${{ secrets.PKG42_TOKEN }}
+          RPM_ARCH: ${{ matrix.rpm_arch }}
+        run: |
+          RPM_FILE=$(ls pkg-work/*.rpm)
+          curl -f -X POST \
+            -H "Authorization: Bearer ${PKG42_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@${RPM_FILE}" \
+            "https://pkg42.dev/rpm/stable/${RPM_ARCH}/upload"
+
   update-homebrew:
     name: Update Homebrew Tap
     needs: release

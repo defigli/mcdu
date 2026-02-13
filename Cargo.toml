@@ -33,6 +33,8 @@ dirs = "5.0"
 # TUI dependencies (mcdu-tui)
 ratatui = "0.29"
 crossterm = "0.29"
+tachyonfx = "0.11"
+tui-big-text = "0.7"
 
 # CLI dependencies (mcdu)
 clap = { version = "4.5", features = ["derive"] }

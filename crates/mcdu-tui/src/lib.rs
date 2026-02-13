@@ -15,6 +15,8 @@ pub mod delete;
 pub mod logger;
 pub mod modal;
 pub mod scan;
+#[cfg(feature = "splash")]
+pub mod splash;
 pub mod tree;
 pub mod ui;
 

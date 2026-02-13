@@ -9,6 +9,10 @@ description = "TUI components for mcdu - terminal UI rendering and state managem
 keywords = ["tui", "ratatui", "terminal"]
 categories = ["command-line-utilities"]
 
+[features]
+default = ["splash"]
+splash = ["tachyonfx", "tui-big-text"]
+
 [dependencies]
 mcdu-core.workspace = true
 ratatui.workspace = true
@@ -20,6 +24,8 @@ dirs.workspace = true
 thiserror.workspace = true
 chrono = "0.4.43"
 tui-piechart = "0.2.8"
+tachyonfx = { workspace = true, optional = true }
+tui-big-text = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mcdu-macos.workspace = true

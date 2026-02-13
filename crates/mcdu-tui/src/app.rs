@@ -72,6 +72,9 @@ pub struct App {
     pub cleanup_files_sort_desc: bool,
     pub cleanup_files_scroll: usize,
     pub cleanup_files_selected: usize,
+    // Splash screen state (only with "splash" feature)
+    #[cfg(feature = "splash")]
+    pub splash_state: Option<crate::splash::SplashState>,
 }
 
 pub enum DeleteProgressUpdate {
@@ -153,6 +156,8 @@ impl App {
             cleanup_files_sort_desc: true,
             cleanup_files_scroll: 0,
             cleanup_files_selected: 0,
+            #[cfg(feature = "splash")]
+            splash_state: Some(crate::splash::SplashState::new()),
         };
         app.start_scan();
         app
@@ -471,6 +476,11 @@ impl App {
                         } else {
                             // Full tree scan
                             self.tree = Some(new_tree);
+                            // Start splash fadeout if active
+                            #[cfg(feature = "splash")]
+                            if let Some(ref mut splash) = self.splash_state {
+                                splash.start_fadeout();
+                            }
                         }
 
                         self.disk_space = platform::get_disk_space(&self.root_path);
@@ -536,8 +546,7 @@ impl App {
             // Append orphaned app data on macOS
             #[cfg(target_os = "macos")]
             {
-                let orphans =
-                    mcdu_macos::scan_orphans(&platform_clone.home_dir, None);
+                let orphans = mcdu_macos::scan_orphans(&platform_clone.home_dir, None);
                 results.extend(orphans);
             }
 
@@ -562,9 +571,7 @@ impl App {
 
         let (tx, rx) = mpsc::channel();
         let home = platform_paths.home_dir.clone();
-        let handle = thread::spawn(move || {
-            mcdu_macos::scan_orphans(&home, Some(&tx))
-        });
+        let handle = thread::spawn(move || mcdu_macos::scan_orphans(&home, Some(&tx)));
 
         self.cleanup_scan_thread = Some(handle);
         self.cleanup_scan_rx = Some(rx);

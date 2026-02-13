@@ -1,0 +1,16 @@
+name: mcdu
+arch: "${NFPM_ARCH}"
+platform: linux
+version: "${VERSION}"
+maintainer: Mikal Villa <spam@mux.rs>
+description: Modern disk usage analyzer with TUI and developer cleanup tools
+homepage: https://github.com/mikalv/mcdu
+license: MIT
+section: utils
+priority: optional
+
+contents:
+  - src: ./mcdu
+    dst: /usr/bin/mcdu
+    file_info:
+      mode: 0755

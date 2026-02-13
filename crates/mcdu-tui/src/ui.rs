@@ -11,6 +11,27 @@ use ratatui::{
 use tui_piechart::{PieChart, PieSlice};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
+    // Splash screen takes over the entire frame when active
+    #[cfg(feature = "splash")]
+    {
+        if let Some(ref mut splash_state) = app.splash_state {
+            if app.is_scanning || !splash_state.is_done() {
+                let done = crate::splash::draw_splash(
+                    f,
+                    splash_state,
+                    app.scan_files_count,
+                    app.scanning_path.as_deref(),
+                );
+                if done {
+                    app.splash_state = None;
+                }
+                return;
+            } else {
+                app.splash_state = None;
+            }
+        }
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -53,7 +74,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         draw_cleanup_progress(f, progress);
     }
 
-    // Loading overlay if scanning
+    // Loading overlay if scanning (non-splash fallback, e.g. rescan)
     if app.is_scanning {
         draw_loading(f, app.scan_files_count, app.scanning_path.as_deref());
     }

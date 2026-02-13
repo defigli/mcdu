@@ -227,9 +227,7 @@ mod tests {
 
         let results = scan_with_known(home, &HashSet::new(), None);
         assert_eq!(results.len(), 1);
-        assert!(results[0]
-            .rule_name
-            .contains("com.uninstalled.app"));
+        assert!(results[0].rule_name.contains("com.uninstalled.app"));
     }
 
     #[test]
