@@ -6,7 +6,7 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Clear, Paragraph};
 use std::time::Instant;
-use tachyonfx::{fx, Effect, Interpolation, Motion, Shader};
+use tachyonfx::{fx, Effect, Interpolation, Motion};
 use tui_big_text::{BigText, PixelSize};
 
 /// Tracks splash animation state across frames.

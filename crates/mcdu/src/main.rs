@@ -108,7 +108,10 @@ fn validate_start_path(path: Option<PathBuf>) -> Result<Option<PathBuf>, Box<dyn
     }
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), Box<dyn Error>> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), Box<dyn Error>>
+where
+    B::Error: 'static,
+{
     loop {
         terminal.draw(|f| {
             ui::draw(f, &mut app);
