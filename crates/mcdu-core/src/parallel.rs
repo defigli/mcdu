@@ -54,7 +54,11 @@ impl ParallelScanConfig {
             self.num_threads
         } else {
             let cpus = num_cpus::get();
-            ((cpus as f64 * self.cpu_ratio).ceil() as usize).max(2)
+            let mut threads = ((cpus as f64 * self.cpu_ratio).ceil() as usize).max(2);
+            if threads > cpus {
+                threads = cpus;
+            }
+            threads.max(1)
         }
     }
 }
@@ -510,8 +514,10 @@ mod tests {
     fn effective_threads_auto() {
         let config = ParallelScanConfig::default();
         let threads = config.effective_threads();
-        assert!(threads >= 2);
-        assert!(threads <= num_cpus::get());
+        let cpus = num_cpus::get();
+        // Ensure at least one thread and never more than detected CPUs.
+        assert!(threads >= 1);
+        assert!(threads <= cpus);
     }
 
     #[test]
