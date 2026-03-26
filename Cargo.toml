@@ -41,3 +41,15 @@ clap = { version = "4.5", features = ["derive"] }
 
 # Dev dependencies
 tempfile = "3"
+
+[profile.release]
+# Production-like profile: enable optimizations and LTO for smaller/faster binary.
+opt-level = 3
+# Use Thin LTO for faster link times with good size/perf tradeoff. Set to true for full LTO.
+lto = "thin"
+# Use a single codegen unit for better optimization across crates (slower compile but faster/smaller binary).
+codegen-units = 1
+# Strip debug info from release builds; still keep panics as unwind for debug, consider 'abort' for max speed.
+debug = 0
+# Incremental = false for release
+incremental = false

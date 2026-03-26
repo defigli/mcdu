@@ -1,0 +1,7 @@
+[build]
+# Use native CPU tuning for best performance when building locally.
+rustflags = ["-C", "target-cpu=native"]
+
+[term]
+# Reduce Cargo output noise
+verbose = false
