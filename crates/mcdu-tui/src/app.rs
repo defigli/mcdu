@@ -536,7 +536,7 @@ impl App {
         let config_clone = config.clone();
         let platform_clone = platform_paths.clone();
         let handle = thread::spawn(move || {
-            let mut results = cleanup::scanner::scan(
+            let results = cleanup::scanner::scan(
                 &config_clone,
                 &platform_clone,
                 Some(tx),
