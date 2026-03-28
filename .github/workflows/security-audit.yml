@@ -28,7 +28,13 @@ jobs:
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: cargo install cargo-audit --locked --force
+
+      - name: Ensure cargo bin on PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Verify cargo-audit
+        run: cargo-audit --version
 
       - name: Run cargo audit (workspace)
         run: cargo audit --workspace
